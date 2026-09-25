@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { analyzePrompt, type Analysis } from "../lib/analyzer";
 import { TECHNIQUES, type TechniqueId, type Change } from "../lib/optimizer";
 import type { ResponseMetrics } from "../lib/metrics";
 import { SAMPLE_PROMPTS } from "../lib/templates";
-import { Bar, ScoreRing, SeverityBadge, Spinner, scoreColor } from "../components/ui";
+import { Bar, CountUp, Icon, Logo, ScoreRing, SeverityTag, Spinner, scoreColor, scoreTone } from "../components/ui";
+import { HeroCircuit } from "../components/HeroCircuit";
 
 interface Critique { summary?: string; strengths?: string[]; weaknesses?: string[]; suggestions?: string[] }
 interface OptResult { optimizedPrompt: string; changes: Change[]; rationale: string; mode: "llm" | "offline"; before: number; after: number; warning?: string }
@@ -62,14 +63,38 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
+  // Presentation-only state
+  const [scrolled, setScrolled] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
+  const step1 = useRef<HTMLElement>(null);
+  const step2 = useRef<HTMLElement>(null);
+  const step3 = useRef<HTMLElement>(null);
+  const optResultRef = useRef<HTMLDivElement>(null);
+  const compareRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     setUserKey(load(KEY_STORE, ""));
     setHistory(load(HISTORY_STORE, []));
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => setStatus({ serverKey: false, model: "" }));
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  // Bring newly produced results into view so the user never has to hunt for them.
+  useEffect(() => {
+    if (opt) optResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [opt]);
+  useEffect(() => {
+    if (runs) compareRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [runs]);
 
   const live = Boolean(status?.serverKey || userKey);
   const optLive = useMemo(() => (optText.trim() ? analyzePrompt(optText) : null), [optText]);
+  const stage = runs ? 3 : opt ? 2 : analysis ? 1 : 0; // completed steps
+  const canOptimize = Boolean(analysis && !analysis.injectionRisk);
 
   async function api<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(path, {
@@ -178,227 +203,323 @@ export default function Home() {
     setCritique(null);
     resetDownstream();
     analyze(p);
+    step1.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function iterate() {
     setPrompt(optText);
     analyze(optText);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    step1.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function startWriting() {
+    step1.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setTimeout(() => editorRef.current?.focus({ preventScroll: true }), 350);
+  }
+
+  async function copyOptimized() {
+    try {
+      await navigator.clipboard.writeText(optText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {}
   }
 
   const toggle = (id: TechniqueId) =>
     setTechniques((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
 
+  const go = (ref: React.RefObject<HTMLElement | null>) => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const marker = (n: number) => (stage >= n ? "done" : stage === n - 1 ? "current" : "");
+
   return (
     <>
-      <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark">⚒</span>
-          PromptForge AI <small>Prompt analyzer · optimizer · evaluator</small>
+      <div className="backdrop" />
+
+      <header className={`nav ${scrolled ? "scrolled" : ""}`}>
+        <div className="nav-left">
+          <a className="logo" href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+            <Logo /> PromptForge
+          </a>
+          <nav className="nav-links" aria-label="Workflow">
+            <button className="nav-link" onClick={() => go(step1)}>Analyze</button>
+            <button className="nav-link" disabled={!canOptimize} onClick={() => go(step2)}>Optimize</button>
+            <button className="nav-link" disabled={!opt} onClick={() => go(step3)}>Evaluate</button>
+          </nav>
         </div>
-        <div className="topbar-actions">
+        <div className="nav-right">
           {status && (
-            <span className={`badge ${live ? "good" : "neutral"}`} title={live ? `Model: ${status.model}` : "Rule-based analysis and template optimizer only"}>
-              <span className="dot" /> {live ? "Live AI" : "Offline mode"}
+            <span className={`status ${live ? "live" : ""}`} title={live ? `Model: ${status.model}` : "Rule-based analysis and template optimizer only"}>
+              <span className="dot" />
+              <span className="status-text">{live ? "Live AI" : "Offline mode"}</span>
             </span>
           )}
-          <button className="btn sm" onClick={() => setShowSettings(true)}>Settings</button>
+          <button className="btn sm" onClick={() => setShowSettings(true)}>
+            <Icon.key /> API key
+          </button>
         </div>
       </header>
 
-      <div className="layout">
+      <section className="hero" id="top">
+        <h1>Better prompts, measured.</h1>
+        <p className="lede">
+          Score a prompt on 8 prompt-engineering dimensions, rewrite it with the techniques you choose, then run both
+          versions and compare the answers side by side.
+        </p>
+        <div className="hero-actions">
+          <button className="btn primary lg" onClick={startWriting}>
+            Analyze a prompt <Icon.arrow />
+          </button>
+          <button className="btn lg" onClick={() => loadPrompt(SAMPLE_PROMPTS[0].prompt)}>
+            Try a sample
+          </button>
+        </div>
+        <HeroCircuit analysis={analysis} />
+      </section>
+
+      <div className="workspace">
         <main>
-          <section className="hero">
-            <h1>Forge better prompts, measure better answers.</h1>
-            <p>
-              Paste a prompt to score it on 8 prompt-engineering dimensions, rewrite it with proven techniques, then run
-              both versions and let an LLM judge compare the responses.
-            </p>
-          </section>
-
-          {/* Step 1: Analyze */}
-          <section className="card">
-            <div className="card-head">
-              <div className="step-title"><span className="step-num">1</span> Write & analyze your prompt</div>
-              <span className="muted small">{prompt.length} / 6000</span>
-            </div>
-            <textarea
-              className="editor"
-              value={prompt}
-              maxLength={6000}
-              placeholder="e.g. explain machine learning"
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
-              }}
-            />
-            <div className="row between mt">
-              <span className="muted small">Ctrl + Enter to analyze</span>
-              <button className="btn primary" disabled={!prompt.trim() || analyzing} onClick={() => analyze()}>
-                {analyzing ? <Spinner /> : null} Analyze prompt
-              </button>
+          <div className="flow">
+            <div className="rail">
+              <div className="rail-fill" style={{ height: `${(Math.min(stage, 2) / 2) * 100}%` }} />
             </div>
 
-            {analysis && (
-              <div className="mt" style={{ marginTop: 22 }}>
-                <div className="analysis-grid">
-                  <div className="score-box">
-                    <ScoreRing score={analysis.score} />
-                    <div className="meta">
-                      Grade <b style={{ color: scoreColor(analysis.score) }}>{analysis.grade}</b> · {analysis.taskType} task
-                      <br />
-                      {analysis.wordCount} words
+            {/* Step 1: Analyze */}
+            <section className="step" ref={step1} id="analyze">
+              <span className={`step-marker ${marker(1)}`}>{stage >= 1 ? <Icon.check /> : "01"}</span>
+              <div className="panel">
+                <div className="panel-head">
+                  <h3>Write your prompt</h3>
+                  <span className="hint">Scored instantly, no API key needed</span>
+                </div>
+                <div className="editor-wrap">
+                  <textarea
+                    ref={editorRef}
+                    className="editor"
+                    value={prompt}
+                    maxLength={6000}
+                    placeholder="e.g. explain machine learning"
+                    aria-label="Prompt"
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
+                    }}
+                  />
+                  <div className="editor-bar">
+                    <span className="kbd"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to analyze</span>
+                    <div className="row" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span className="counter">{prompt.length.toLocaleString()} / 6,000</span>
+                      <button className="btn primary" disabled={!prompt.trim() || analyzing} onClick={() => analyze()}>
+                        {analyzing ? <Spinner /> : null} {analyzing ? "Analyzing" : "Analyze"}
+                      </button>
                     </div>
-                  </div>
-                  <div className="bars">
-                    {analysis.dimensions.map((d) => (
-                      <Bar key={d.key} label={d.label} value={d.score} hint={`${d.note} (weight ${d.weight}%)`} />
-                    ))}
                   </div>
                 </div>
 
-                {analysis.injectionRisk && (
-                  <div className="notice bad">
-                    Prompt-injection pattern detected. PromptForge will not optimize or run instructions that try to
-                    override system rules.
-                  </div>
-                )}
+                {analyzing && !analysis && <AnalysisSkeleton />}
 
-                {analysis.issues.length > 0 && (
-                  <>
-                    <h4 className="mt" style={{ marginBottom: 8 }}>Issues found ({analysis.issues.length})</h4>
-                    <ul className="issues">
-                      {analysis.issues.map((i) => (
-                        <li className="issue" key={i.id}>
-                          <SeverityBadge severity={i.severity} />
-                          <div>
-                            <div className="tech">{i.technique}</div>
-                            <div>{i.message}</div>
-                            <div className="fix">→ {i.suggestion}</div>
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-
-                {critique && (
-                  <div className="critique">
-                    <h4>AI critique</h4>
-                    {critique.summary && <p style={{ margin: "0 0 8px" }}>{critique.summary}</p>}
-                    {!!critique.weaknesses?.length && (<><b className="small">Weaknesses</b><ul>{critique.weaknesses.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
-                    {!!critique.suggestions?.length && (<><b className="small">Suggestions</b><ul>{critique.suggestions.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* Step 2: Optimize */}
-          {analysis && !analysis.injectionRisk && (
-            <section className="card">
-              <div className="card-head">
-                <div className="step-title"><span className="step-num">2</span> Optimize with prompt-engineering techniques</div>
-                <span className="muted small">{live ? "AI rewrite" : "Offline templates"}</span>
-              </div>
-              <div className="row">
-                {TECHNIQUES.map((t) => (
-                  <button key={t.id} className={`chip ${techniques.includes(t.id) ? "on" : ""}`} title={t.description} onClick={() => toggle(t.id)}>
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-              <div className="row between mt">
-                <span className="muted small">{techniques.length} technique(s) selected</span>
-                <button className="btn primary" disabled={optimizing || techniques.length === 0} onClick={optimize}>
-                  {optimizing ? <Spinner /> : null} Optimize prompt
-                </button>
-              </div>
-
-              {opt && (
-                <div style={{ marginTop: 20 }}>
-                  <div className="delta">
-                    <span>Prompt score</span>
-                    <span className="big">{opt.before}</span>→<span className="big">{optLive?.score ?? opt.after}</span>
-                    <span>(+{(optLive?.score ?? opt.after) - opt.before})</span>
-                    <span className="badge neutral" style={{ marginLeft: "auto" }}>{opt.mode === "llm" ? "AI optimized" : "Template optimized"}</span>
-                  </div>
-                  <div className="split">
-                    <div className="pane">
-                      <div className="pane-head">Original <span className="muted">{opt.before}/100</span></div>
-                      <div className="pane-body">{prompt}</div>
-                    </div>
-                    <div className="pane">
-                      <div className="pane-head">
-                        Optimized (editable) <span className="muted">{optLive?.score ?? opt.after}/100</span>
+                {analysis && (
+                  <div key={analysis.score + analysis.wordCount} style={{ marginTop: 32 }}>
+                    <div className="analysis">
+                      <div className="score-box">
+                        <ScoreRing score={analysis.score} />
+                        <div className="score-meta">
+                          <span className={`tag ${scoreTone(analysis.score)}`}>Grade {analysis.grade}</span>
+                          <span className="tag">{analysis.taskType}</span>
+                          <span className="tag">{analysis.wordCount} words</span>
+                        </div>
                       </div>
-                      <textarea className="editor" value={optText} onChange={(e) => setOptText(e.target.value)} />
+                      <div className="bars">
+                        {analysis.dimensions.map((d, i) => (
+                          <Bar key={d.key} index={i} label={d.label} value={d.score} hint={`${d.note} (weight ${d.weight}%)`} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                  {opt.rationale && <p className="muted small" style={{ marginBottom: 0 }}>{opt.rationale}</p>}
-                  {opt.changes.length > 0 && (
-                    <ul className="changes">
-                      {opt.changes.map((c, i) => (
-                        <li key={i}><b>{c.technique}</b><span>{c.description}</span></li>
-                      ))}
-                    </ul>
-                  )}
-                  <div className="row mt">
-                    <button className="btn sm" onClick={() => navigator.clipboard.writeText(optText)}>Copy optimized</button>
-                    <button className="btn sm" onClick={iterate}>Use as new prompt & re-analyze</button>
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
 
-          {/* Step 3: Evaluate */}
-          {opt && (
-            <section className="card">
-              <div className="card-head">
-                <div className="step-title"><span className="step-num">3</span> Test & evaluate responses</div>
+                    {analysis.injectionRisk && (
+                      <div className="notice bad">
+                        <Icon.alert />
+                        <span>Prompt-injection pattern detected. PromptForge will not optimize or run instructions that try to override system rules.</span>
+                      </div>
+                    )}
+
+                    {analysis.issues.length > 0 && (
+                      <>
+                        <div className="subhead">Issues found <span className="tag">{analysis.issues.length}</span></div>
+                        <ul className="issues">
+                          {analysis.issues.map((i, idx) => (
+                            <li className="issue" key={i.id} style={{ "--i": idx } as React.CSSProperties}>
+                              <SeverityTag severity={i.severity} />
+                              <div>
+                                <div className="tech">{i.technique}</div>
+                                <div className="msg">{i.message}</div>
+                                <div className="fix">{i.suggestion}</div>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+
+                    {critique && (
+                      <div className="critique">
+                        <div className="subhead" style={{ margin: "0 0 8px" }}>AI critique</div>
+                        {critique.summary && <p>{critique.summary}</p>}
+                        {!!critique.weaknesses?.length && (<><div className="label">Weaknesses</div><ul>{critique.weaknesses.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
+                        {!!critique.suggestions?.length && (<><div className="label">Suggestions</div><ul>{critique.suggestions.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
+                      </div>
+                    )}
+
+                    {canOptimize && !opt && (
+                      <div className="actions">
+                        <button className="btn" onClick={() => go(step2)}>Next: optimize <Icon.arrow /></button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              {live ? (
-                <>
-                  <p className="muted small" style={{ marginTop: 0 }}>
-                    Runs the original and optimized prompts on the same model, then scores each response with an
-                    LLM judge (5 criteria) and rule-based compliance checks.
-                  </p>
-                  <button className="btn primary" disabled={running || !optText.trim()} onClick={runComparison}>
-                    {running ? <Spinner /> : null} {running ? "Generating and judging…" : "Run both & compare"}
-                  </button>
-                </>
-              ) : (
-                <div className="notice info">
-                  Response generation needs an LLM API key. Add a free Groq key in <b>Settings</b>, or paste a response
-                  you got elsewhere below to get the rule-based metrics.
-                </div>
-              )}
-
-              {runs && <Comparison runs={runs} />}
-
-              <details className="mt">
-                <summary className="small" style={{ cursor: "pointer" }}>Evaluate a response you already have</summary>
-                <textarea
-                  className="editor mt"
-                  style={{ minHeight: 110 }}
-                  placeholder="Paste a model response to evaluate against the optimized prompt"
-                  value={manualResponse}
-                  onChange={(e) => setManualResponse(e.target.value)}
-                />
-                <button className="btn sm mt" disabled={!manualResponse.trim()} onClick={evaluateManual}>Evaluate response</button>
-                {manualEval && <div className="mt"><EvalCard title="Your response" result={manualEval} /></div>}
-              </details>
             </section>
-          )}
 
-          {warning && <div className="notice warn">{warning}</div>}
-          {error && <div className="notice bad">{error}</div>}
+            {/* Step 2: Optimize */}
+            {canOptimize && (
+              <section className="step" ref={step2} id="optimize">
+                <span className={`step-marker ${marker(2)}`}>{stage >= 2 ? <Icon.check /> : "02"}</span>
+                <div className="panel">
+                  <div className="panel-head">
+                    <h3>Choose techniques</h3>
+                    <span className="hint">{live ? "Rewritten by the LLM" : "Rewritten with offline templates"}</span>
+                  </div>
+                  <div className="chips" role="group" aria-label="Techniques">
+                    {TECHNIQUES.map((t) => {
+                      const on = techniques.includes(t.id);
+                      return (
+                        <button key={t.id} className={`chip ${on ? "on" : ""}`} aria-pressed={on} title={t.description} onClick={() => toggle(t.id)}>
+                          <span className="tick"><Icon.check size={10} /></span>
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                    <span className="hint" style={{ fontSize: 13, color: "var(--muted)" }}>{techniques.length} of {TECHNIQUES.length} selected</span>
+                    <button className="btn primary" disabled={optimizing || techniques.length === 0} onClick={optimize}>
+                      {optimizing ? <Spinner /> : null} {optimizing ? "Optimizing" : "Optimize prompt"}
+                    </button>
+                  </div>
+
+                  {optimizing && !opt && <div className="shimmer" style={{ marginTop: 24, height: 120, borderRadius: 12, background: "var(--surface-2)" }} />}
+
+                  {opt && (
+                    <div ref={optResultRef} style={{ marginTop: 32, scrollMarginTop: 96 }}>
+                      <div className="delta">
+                        <span className="label">Prompt score</span>
+                        <span className="num" style={{ color: scoreColor(opt.before) }}>{opt.before}</span>
+                        <span className="arrow"><Icon.arrow /></span>
+                        <span className="num" style={{ color: scoreColor(optLive?.score ?? opt.after) }}><CountUp value={optLive?.score ?? opt.after} /></span>
+                        <span className="gain" style={{ color: "var(--good)" }}>+{(optLive?.score ?? opt.after) - opt.before}</span>
+                        <span className="tag right">{opt.mode === "llm" ? "AI rewrite" : "Template rewrite"}</span>
+                      </div>
+                      <div className="split">
+                        <div className="pane">
+                          <div className="pane-head">Original <span className="tag">{opt.before}</span></div>
+                          <div className="pane-body">{prompt}</div>
+                        </div>
+                        <div className="pane">
+                          <div className="pane-head">
+                            Optimized, editable <span className="tag accent">{optLive?.score ?? opt.after}</span>
+                          </div>
+                          <textarea className="editor" aria-label="Optimized prompt" value={optText} onChange={(e) => setOptText(e.target.value)} />
+                        </div>
+                      </div>
+                      {opt.rationale && <p className="rationale">{opt.rationale}</p>}
+                      {opt.changes.length > 0 && (
+                        <ul className="changes">
+                          {opt.changes.map((c, i) => (
+                            <li key={i} style={{ "--i": i } as React.CSSProperties}><b>{c.technique}</b><span>{c.description}</span></li>
+                          ))}
+                        </ul>
+                      )}
+                      <div className="actions">
+                        <button className="btn" onClick={copyOptimized}>
+                          {copied ? <Icon.check /> : <Icon.copy />} {copied ? "Copied" : "Copy prompt"}
+                        </button>
+                        <button className="btn" onClick={iterate}><Icon.loop /> Use as new prompt</button>
+                        <button className="btn ghost" onClick={() => go(step3)}>Next: evaluate <Icon.arrow /></button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* Step 3: Evaluate */}
+            {opt && (
+              <section className="step" ref={step3} id="evaluate">
+                <span className={`step-marker ${marker(3)}`}>{stage >= 3 ? <Icon.check /> : "03"}</span>
+                <div className="panel">
+                  <div className="panel-head">
+                    <h3>Compare the answers</h3>
+                    <span className="hint">LLM judge on 5 criteria plus rule-based checks</span>
+                  </div>
+                  {live ? (
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                      <p style={{ color: "var(--text-2)", fontSize: 14, maxWidth: 520 }}>
+                        Runs the original and optimized prompts on the same model, then scores each answer.
+                      </p>
+                      <button className="btn primary" disabled={running || !optText.trim()} onClick={runComparison}>
+                        {running ? <Spinner /> : <Icon.play />} {running ? "Generating and judging" : "Run both and compare"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="notice info" style={{ marginTop: 0 }}>
+                      <Icon.key />
+                      <span>
+                        Generating answers needs an LLM API key. Add a free Groq key with the <b>API key</b> button, or
+                        paste an answer you already have below to get the rule-based checks.
+                      </span>
+                    </div>
+                  )}
+
+                  {running && !runs && (
+                    <div className="eval-grid" style={{ marginTop: 24 }}>
+                      <div className="shimmer" style={{ height: 220, borderRadius: 12, background: "var(--surface-2)" }} />
+                      <div className="shimmer" style={{ height: 220, borderRadius: 12, background: "var(--surface-2)" }} />
+                    </div>
+                  )}
+
+                  {runs && (
+                    <div ref={compareRef} style={{ scrollMarginTop: 96 }}>
+                      <Comparison runs={runs} />
+                    </div>
+                  )}
+
+                  <details className="disclose">
+                    <summary><Icon.chevron /> Evaluate an answer you already have</summary>
+                    <div>
+                      <div className="editor-wrap">
+                        <textarea
+                          className="editor"
+                          style={{ minHeight: 120 }}
+                          placeholder="Paste a model's answer to check it against the optimized prompt"
+                          value={manualResponse}
+                          onChange={(e) => setManualResponse(e.target.value)}
+                        />
+                      </div>
+                      <button className="btn" style={{ marginTop: 12 }} disabled={!manualResponse.trim()} onClick={evaluateManual}>Evaluate answer</button>
+                      {manualEval && <div style={{ marginTop: 16 }}><EvalCard title="Your answer" result={manualEval} /></div>}
+                    </div>
+                  </details>
+                </div>
+              </section>
+            )}
+
+            {warning && <div className="notice warn"><Icon.alert /><span>{warning}</span></div>}
+            {error && <div className="notice bad" role="alert"><Icon.alert /><span>{error}</span></div>}
+          </div>
         </main>
 
         <aside className="side">
-          <div className="card">
-            <h3>Try a sample</h3>
+          <div className="panel">
+            <div className="panel-head"><h3>Samples</h3></div>
             <ul className="list">
               {SAMPLE_PROMPTS.map((s) => (
                 <li key={s.title}>
@@ -410,23 +531,23 @@ export default function Home() {
               ))}
             </ul>
           </div>
-          <div className="card">
-            <div className="row between" style={{ marginBottom: 10 }}>
-              <h3 style={{ margin: 0 }}>History</h3>
+          <div className="panel">
+            <div className="panel-head">
+              <h3>History</h3>
               {history.length > 0 && (
                 <button className="btn ghost sm" onClick={() => { setHistory([]); save(HISTORY_STORE, []); }}>Clear</button>
               )}
             </div>
             {history.length === 0 ? (
-              <div className="empty">Optimized prompts will appear here.</div>
+              <div className="empty">Optimized prompts appear here.</div>
             ) : (
               <ul className="list">
                 {history.map((h) => (
                   <li key={h.id}>
-                    <button onClick={() => { setPrompt(h.original); analyze(h.original); }}>
+                    <button onClick={() => { setPrompt(h.original); analyze(h.original); go(step1); }}>
                       <span className="t">
-                        {h.before} → {h.after}
-                        {h.evalOptimized != null && <span className="muted"> · judge {h.evalOriginal ?? "–"} → {h.evalOptimized}</span>}
+                        <span>{h.before} <span className="n">to</span> {h.after}</span>
+                        {h.evalOptimized != null && <span className="n">judge {h.evalOriginal ?? "n/a"} / {h.evalOptimized}</span>}
                       </span>
                       <span className="s">{h.original}</span>
                     </button>
@@ -437,22 +558,29 @@ export default function Home() {
           </div>
         </aside>
       </div>
-      <footer>PromptForge AI · Generative AI Capstone Project 2026</footer>
+
+      <footer>
+        <span>PromptForge AI · Generative AI Capstone Project 2026</span>
+        <span>{status?.model ? `Model: ${status.model}` : ""}</span>
+      </footer>
 
       {showSettings && (
         <div className="modal-back" onClick={() => setShowSettings(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Settings</h2>
-            <p className="muted small">
+          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => { if (e.key === "Escape") setShowSettings(false); }}>
+            <h2 id="settings-title">API key</h2>
+            <p>
               {status?.serverKey
-                ? `This deployment already has an AI key configured (model: ${status.model}). You only need your own key if the shared one hits its rate limit.`
-                : "No server key is configured. Add a free Groq API key to enable AI critique, AI optimization, response generation and LLM-as-judge evaluation."}
+                ? `This deployment already has a key configured (model: ${status.model}). Add your own only if the shared one hits its rate limit.`
+                : "No server key is configured. A free Groq key enables AI critique, AI rewriting, answer generation and LLM-judge scoring."}
             </p>
-            <label className="small" htmlFor="key"><b>Your Groq API key</b> (stored only in this browser)</label>
-            <input id="key" className="field mt" type="password" placeholder="gsk_…" value={userKey} onChange={(e) => setUserKey(e.target.value)} />
-            <p className="muted small">Get one free at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com/keys</a>.</p>
-            <div className="row between mt">
-              <button className="btn ghost sm" onClick={() => { setUserKey(""); save(KEY_STORE, ""); }}>Remove key</button>
+            <label htmlFor="key">Your Groq API key</label>
+            <input id="key" autoFocus className="field" type="password" placeholder="gsk_..." value={userKey} onChange={(e) => setUserKey(e.target.value)} />
+            <p style={{ fontSize: 13, color: "var(--muted)" }}>
+              Stored only in this browser. Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com/keys</a>.
+            </p>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={() => { setUserKey(""); save(KEY_STORE, ""); }}>Remove key</button>
               <button className="btn primary" onClick={() => { save(KEY_STORE, userKey.trim()); setShowSettings(false); }}>Save</button>
             </div>
           </div>
@@ -462,62 +590,78 @@ export default function Home() {
   );
 }
 
+function AnalysisSkeleton() {
+  return (
+    <div className="analysis shimmer" style={{ marginTop: 32 }}>
+      <div style={{ width: 148, height: 148, borderRadius: "50%", background: "var(--surface-3)", margin: "0 auto" }} />
+      <div className="bars">
+        {Array.from({ length: 8 }, (_, i) => <div key={i} className="skeleton" style={{ width: `${90 - i * 6}%` }} />)}
+      </div>
+    </div>
+  );
+}
+
 function Comparison({ runs }: { runs: { original: RunResult; optimized: RunResult } }) {
   const a = runs.original.evaluation.judge?.overall;
   const b = runs.optimized.evaluation.judge?.overall;
   const winner = a != null && b != null ? (b > a ? "optimized" : a > b ? "original" : "tie") : null;
   return (
-    <div style={{ marginTop: 18 }}>
+    <>
       {winner && (
-        <div className="delta" style={winner === "original" ? { background: "var(--warn-soft)", color: "var(--warn)" } : undefined}>
-          <span>Judge score</span>
-          <span className="big">{a}</span>→<span className="big">{b}</span>
-          <span>
-            {winner === "optimized" ? `Optimized prompt wins by ${b! - a!} points` : winner === "tie" ? "Tie" : "Original scored higher: try another iteration"}
+        <div className="verdict">
+          <span className="num" style={{ font: "700 28px var(--sans)", color: scoreColor(a!) }}><CountUp value={a!} /></span>
+          <span style={{ color: "var(--muted)" }}><Icon.arrow /></span>
+          <span className="num" style={{ font: "700 28px var(--sans)", color: scoreColor(b!) }}><CountUp value={b!} /></span>
+          <span className="msg">
+            {winner === "optimized"
+              ? `The optimized prompt scored ${b! - a!} points higher.`
+              : winner === "tie"
+                ? "Both answers scored the same."
+                : `The original scored ${a! - b!} points higher. Try adjusting the techniques and run again.`}
           </span>
         </div>
       )}
-      <div className="eval-grid">
+      <div className="eval-grid" style={winner ? undefined : { marginTop: 24 }}>
         <EvalCard title="Original prompt" run={runs.original} result={runs.original.evaluation} winner={winner === "original"} />
         <EvalCard title="Optimized prompt" run={runs.optimized} result={runs.optimized.evaluation} winner={winner === "optimized"} />
       </div>
-    </div>
+    </>
   );
 }
 
 function EvalCard({ title, run, result, winner }: { title: string; run?: RunResult; result: EvalResult; winner?: boolean }) {
   const { metrics, judge } = result;
   return (
-    <div className={`eval-card ${winner ? "winner" : ""}`}>
-      <div className="row between">
-        <b>{title}</b>
-        {judge && <span className="badge" style={{ background: "var(--surface-2)", color: scoreColor(judge.overall) }}>{judge.overall}/100</span>}
+    <div className="eval-card">
+      <div className="top">
+        <h4>{title} {winner && <span className="tag good">Higher score</span>}</h4>
+        {judge && <span className="big" style={{ color: scoreColor(judge.overall) }}><CountUp value={judge.overall} /></span>}
       </div>
       {judge && (
-        <div className="bars mt">
-          {Object.entries(judge.scores).map(([k, v]) => <Bar key={k} label={CRITERIA_LABELS[k] ?? k} value={v} />)}
+        <div className="bars">
+          {Object.entries(judge.scores).map(([k, v], i) => <Bar key={k} index={i} label={CRITERIA_LABELS[k] ?? k} value={v} />)}
         </div>
       )}
-      {judge?.feedback && <p className="small muted">{judge.feedback}</p>}
+      {judge?.feedback && <p className="feedback">{judge.feedback}</p>}
       <ul className="checks">
         {metrics.checks.map((c) => (
           <li key={c.label}>
-            <span>{c.passed ? "✓" : "✗"} {c.label}</span>
-            <span className="muted">{c.detail}</span>
+            <span><span className={c.passed ? "ok" : "no"}>{c.passed ? "Pass" : "Fail"}</span> · {c.label}</span>
+            <span className="detail">{c.detail}</span>
           </li>
         ))}
       </ul>
-      <div className="stat-row">
+      <div className="stats">
         <span><b>{metrics.wordCount}</b> words</span>
         <span>Readability <b>{metrics.readability}</b></span>
         {run && <span><b>{(run.latencyMs / 1000).toFixed(1)}s</b> latency</span>}
         {run?.tokens && <span><b>{run.tokens.completion}</b> tokens</span>}
       </div>
-      {result.warning && <div className="notice warn">{result.warning}</div>}
+      {result.warning && <div className="notice warn"><Icon.alert /><span>{result.warning}</span></div>}
       {run && (
-        <details className="mt">
-          <summary className="small" style={{ cursor: "pointer" }}>Show response</summary>
-          <div className="pane mt"><div className="pane-body prose">{run.response}</div></div>
+        <details className="disclose">
+          <summary><Icon.chevron /> Show answer</summary>
+          <div className="pane"><div className="pane-body prose">{run.response}</div></div>
         </details>
       )}
     </div>
