@@ -135,7 +135,9 @@ export default function Home() {
     setRunning(true);
     setError(null);
     try {
-      const [original, optimized] = await Promise.all([runOne(prompt), runOne(optText)]);
+      // Sequential rather than parallel: free-tier keys have a low tokens-per-minute limit.
+      const original = await runOne(prompt);
+      const optimized = await runOne(optText);
       setRuns({ original, optimized });
       setHistory((h) => {
         const next = h.map((item, i) =>

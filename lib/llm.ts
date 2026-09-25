@@ -21,32 +21,44 @@ export function getConfig(userKey?: string | null): LlmConfig | null {
   return {
     apiKey,
     baseUrl: (process.env.LLM_BASE_URL || "https://api.groq.com/openai/v1").replace(/\/$/, ""),
-    model: process.env.LLM_MODEL || "llama-3.3-70b-versatile",
+    model: process.env.LLM_MODEL || "openai/gpt-oss-120b",
   };
 }
 
 export async function chat(
   cfg: LlmConfig,
   messages: { role: "system" | "user" | "assistant"; content: string }[],
-  opts: { temperature?: number; json?: boolean; maxTokens?: number } = {},
+  opts: { temperature?: number; json?: boolean; maxTokens?: number; retries?: number; maxWaitMs?: number } = {},
 ): Promise<ChatResult> {
-  const start = Date.now();
-  const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
-    body: JSON.stringify({
-      model: cfg.model,
-      messages,
-      temperature: opts.temperature ?? 0.7,
-      max_tokens: opts.maxTokens ?? 1500,
-      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
-    }),
-    signal: AbortSignal.timeout(45_000),
+  let start = Date.now();
+  const body = JSON.stringify({
+    model: cfg.model,
+    messages,
+    temperature: opts.temperature ?? 0.7,
+    max_tokens: opts.maxTokens ?? 1500,
+    ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+    // Reasoning models spend output tokens on hidden reasoning; keep it short
+    // so free-tier tokens-per-minute limits go further.
+    ...(/gpt-oss/.test(cfg.model) ? { reasoning_effort: "low" } : {}),
   });
+  let res: Response;
+  for (let attempt = 0; ; attempt++) {
+    start = Date.now();
+    res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
+      body,
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (res.status !== 429 || attempt >= (opts.retries ?? 1)) break;
+    // Wait as long as the provider asks (Retry-After), within a cap.
+    const waitMs = Math.min((Number(res.headers.get("retry-after")) || 5) * 1000 + 250, opts.maxWaitMs ?? 20_000);
+    await new Promise((r) => setTimeout(r, waitMs));
+  }
   if (!res.ok) {
-    const body = await res.text().catch(() => "");
+    const errText = await res.text().catch(() => "");
     const hint = res.status === 401 ? "Invalid API key." : res.status === 429 ? "Rate limit reached, try again shortly." : "";
-    throw new Error(`LLM request failed (${res.status}). ${hint} ${body.slice(0, 200)}`.trim());
+    throw new Error(`LLM request failed (${res.status}). ${hint} ${errText.slice(0, 200)}`.trim());
   }
   const data = await res.json();
   return {

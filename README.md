@@ -29,7 +29,7 @@ PromptForge works in two modes:
 ## Tech stack
 
 - **Next.js 15 (App Router) + React 19 + TypeScript**: UI and serverless API routes in one project, deploys to Vercel with zero config.
-- **Groq API (`llama-3.3-70b-versatile`)**: free tier and very fast responses. Any OpenAI-compatible API works by changing `LLM_BASE_URL` and `LLM_MODEL`.
+- **Groq API (`openai/gpt-oss-120b`)**: free tier and very fast responses. Any OpenAI-compatible API works by changing `LLM_BASE_URL` and `LLM_MODEL`.
 - **Rule-based analyzer (TypeScript)**: deterministic, instant, works offline, and makes results reproducible for benchmarking.
 - **Node.js test runner**: unit tests with no extra dependencies.
 
@@ -57,6 +57,20 @@ With `LLM_API_KEY` set, the benchmark also optimizes the 10 weak prompts with th
 ## Architecture
 
 ![Architecture](docs/screenshots/00-architecture.png)
+
+## Results
+
+From `npm run benchmark` (20 hand-labelled prompts, 5 injection attempts, Groq `openai/gpt-oss-120b`):
+
+| Metric | Result |
+|---|---|
+| Weak vs strong prompt classification | 95% (19/20) |
+| Prompt-injection detection | 5/5, 0 false positives |
+| Prompt score of weak prompts after LLM optimization | 21.8 → 80.6 |
+| LLM-judge score of answers, original vs optimized | 91.6 vs 90.2 (no measurable gain) |
+| Mean generation latency | 2.1 s |
+
+On a strong model, optimized prompts made answers more structured but did not raise judged quality for simple requests. An earlier optimizer version that added unrequested limits made answers worse (92.2 vs 87.2), and was fixed.
 
 ## Project structure
 

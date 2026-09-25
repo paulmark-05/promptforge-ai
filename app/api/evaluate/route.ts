@@ -6,6 +6,8 @@ import { handle, readText, userKey } from "../../../lib/api";
 
 const CRITERIA = ["relevance", "completeness", "accuracy", "clarity", "instruction_following"] as const;
 
+export const maxDuration = 60;
+
 export const POST = handle(async (req) => {
   const body = await req.json();
   const prompt = readText(body.prompt, "prompt");
@@ -23,7 +25,7 @@ export const POST = handle(async (req) => {
           { role: "system", content: JUDGE_SYSTEM },
           { role: "user", content: `<prompt>\n${prompt}\n</prompt>\n\n<response>\n${response}\n</response>` },
         ],
-        { temperature: 0, json: true, maxTokens: 700 },
+        { temperature: 0, json: true, maxTokens: 1500 },
       );
       const j = parseJson<{ scores?: Record<string, unknown>; feedback?: string; improvements?: string[] }>(r.text);
       const scores = Object.fromEntries(CRITERIA.map((c) => [c, clampScore(j.scores?.[c])])) as Record<string, number>;

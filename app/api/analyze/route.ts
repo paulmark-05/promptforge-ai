@@ -4,6 +4,8 @@ import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { CRITIC_SYSTEM, wrapPrompt } from "../../../lib/prompts";
 import { handle, readText, userKey } from "../../../lib/api";
 
+export const maxDuration = 60;
+
 export const POST = handle(async (req) => {
   const body = await req.json();
   const prompt = readText(body.prompt, "prompt");
@@ -20,7 +22,7 @@ export const POST = handle(async (req) => {
           { role: "system", content: CRITIC_SYSTEM },
           { role: "user", content: wrapPrompt(prompt) },
         ],
-        { temperature: 0.2, json: true, maxTokens: 700 },
+        { temperature: 0.2, json: true, maxTokens: 1500 },
       );
       critique = parseJson(r.text);
     } catch (e) {

@@ -5,6 +5,8 @@ import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { OPTIMIZER_SYSTEM, wrapPrompt } from "../../../lib/prompts";
 import { handle, readText, userKey } from "../../../lib/api";
 
+export const maxDuration = 60;
+
 export const POST = handle(async (req) => {
   const body = await req.json();
   const prompt = readText(body.prompt, "prompt");
@@ -41,7 +43,7 @@ export const POST = handle(async (req) => {
             content: `${wrapPrompt(prompt)}\n\nWeaknesses found:\n${issues.join("\n") || "- none"}\n\nTechniques to apply:\n${labels.join("\n")}`,
           },
         ],
-        { temperature: 0.4, json: true, maxTokens: 1500 },
+        { temperature: 0.4, json: true, maxTokens: 3000 },
       );
       const j = parseJson<{ optimized_prompt?: string; changes?: { technique: string; description: string }[]; rationale?: string }>(r.text);
       if (!j.optimized_prompt?.trim()) throw new Error("Empty optimized prompt.");

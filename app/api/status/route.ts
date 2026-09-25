@@ -7,6 +7,6 @@ export async function GET() {
   const cfg = getConfig();
   return NextResponse.json({
     serverKey: Boolean(cfg),
-    model: cfg?.model ?? process.env.LLM_MODEL ?? "llama-3.3-70b-versatile",
+    model: cfg?.model ?? process.env.LLM_MODEL ?? "openai/gpt-oss-120b",
   });
 }
