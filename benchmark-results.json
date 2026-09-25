@@ -1,0 +1,238 @@
+{
+  "runAt": "2026-09-25T22:07:41.583Z",
+  "offline": {
+    "prompts": 20,
+    "avgScoreWeak": 21.8,
+    "avgScoreStrong": 65.6,
+    "weakVsStrongAccuracy": 0.95,
+    "taskTypeAccuracy": 1,
+    "injectionRecall": "5/5",
+    "injectionFalsePositives": "0/20",
+    "avgUpliftWeakOffline": 65.4,
+    "avgScoreAfterOfflineWeak": 87.2,
+    "avgAnalyzerMs": 1.06
+  },
+  "rows": [
+    {
+      "prompt": "explain machine learning",
+      "quality": "weak",
+      "task": "explanation",
+      "score": 17,
+      "predicted": "weak",
+      "detectedTask": "explanation",
+      "after": 91,
+      "ms": 14.739899999999977,
+      "issues": 5
+    },
+    {
+      "prompt": "write a python function to check if a string is a palindrome",
+      "quality": "weak",
+      "task": "coding",
+      "score": 25,
+      "predicted": "weak",
+      "detectedTask": "coding",
+      "after": 89,
+      "ms": 0.16550000000000864,
+      "issues": 5
+    },
+    {
+      "prompt": "Write something good for my bakery's instagram. Make it nice.",
+      "quality": "weak",
+      "task": "writing",
+      "score": 24,
+      "predicted": "weak",
+      "detectedTask": "writing",
+      "after": 77,
+      "ms": 1.0266000000000304,
+      "issues": 5
+    },
+    {
+      "prompt": "Summarize the causes of World War 1",
+      "quality": "weak",
+      "task": "summarization",
+      "score": 26,
+      "predicted": "weak",
+      "detectedTask": "summarization",
+      "after": 91,
+      "ms": 3.0351,
+      "issues": 5
+    },
+    {
+      "prompt": "Compare React and Vue, which one is better?",
+      "quality": "weak",
+      "task": "analysis",
+      "score": 21,
+      "predicted": "weak",
+      "detectedTask": "analysis",
+      "after": 87,
+      "ms": 0.14289999999999736,
+      "issues": 5
+    },
+    {
+      "prompt": "write an email to my manager asking for leave",
+      "quality": "weak",
+      "task": "writing",
+      "score": 30,
+      "predicted": "weak",
+      "detectedTask": "writing",
+      "after": 82,
+      "ms": 0.11050000000000182,
+      "issues": 4
+    },
+    {
+      "prompt": "give me startup ideas",
+      "quality": "weak",
+      "task": "brainstorming",
+      "score": 17,
+      "predicted": "weak",
+      "detectedTask": "brainstorming",
+      "after": 89,
+      "ms": 0.06610000000000582,
+      "issues": 5
+    },
+    {
+      "prompt": "translate hello how are you in french",
+      "quality": "weak",
+      "task": "translation",
+      "score": 22,
+      "predicted": "weak",
+      "detectedTask": "translation",
+      "after": 93,
+      "ms": 0.06759999999997035,
+      "issues": 5
+    },
+    {
+      "prompt": "what is blockchain",
+      "quality": "weak",
+      "task": "explanation",
+      "score": 7,
+      "predicted": "weak",
+      "detectedTask": "explanation",
+      "after": 91,
+      "ms": 0.04680000000001883,
+      "issues": 6
+    },
+    {
+      "prompt": "fix my sql query it is slow",
+      "quality": "weak",
+      "task": "coding",
+      "score": 29,
+      "predicted": "weak",
+      "detectedTask": "coding",
+      "after": 82,
+      "ms": 0.04759999999998854,
+      "issues": 4
+    },
+    {
+      "prompt": "You are a senior Python developer. Write a function `is_palindrome(s: str) -> bool` that ignores case and punctuation. Return the code in one code block, then 3 example calls with expected output. Do not use external libraries.",
+      "quality": "strong",
+      "task": "coding",
+      "score": 58,
+      "predicted": "strong",
+      "detectedTask": "coding",
+      "after": 92,
+      "ms": 0.07979999999997744,
+      "issues": 2
+    },
+    {
+      "prompt": "Act as an expert history teacher. Summarize the 4 main causes of World War 1 for Class 10 students preparing for exams. Use exactly 4 bullet points, each under 30 words, in simple language.",
+      "quality": "strong",
+      "task": "summarization",
+      "score": 70,
+      "predicted": "strong",
+      "detectedTask": "summarization",
+      "after": 86,
+      "ms": 0.06980000000004338,
+      "issues": 1
+    },
+    {
+      "prompt": "### Role\nYou are a social media marketer for small food businesses.\n\n### Task\nWrite 3 Instagram captions for my bakery's new chocolate croissant.\n\n### Constraints\n- Under 40 words each\n- Friendly tone, 2 emojis max\n- End with a call to action\n\n### Example\nFor example: \"Fresh out of the oven ...\"",
+      "quality": "strong",
+      "task": "writing",
+      "score": 72,
+      "predicted": "strong",
+      "detectedTask": "writing",
+      "after": 90,
+      "ms": 0.09929999999997108,
+      "issues": 1
+    },
+    {
+      "prompt": "You are a technical lead. Our team of 4 junior developers is building an internal dashboard. Compare React and Vue in a markdown table on learning curve, ecosystem, performance and hiring, then give a 2-sentence recommendation for our context.",
+      "quality": "strong",
+      "task": "analysis",
+      "score": 74,
+      "predicted": "strong",
+      "detectedTask": "analysis",
+      "after": 89,
+      "ms": 0.0858000000000061,
+      "issues": 2
+    },
+    {
+      "prompt": "Act as a professional translator. Translate the following sentence into formal French and explain any word choice in one line.\nSentence: \"\"\"Hello, how are you? I hope your week is going well.\"\"\"",
+      "quality": "strong",
+      "task": "translation",
+      "score": 45,
+      "predicted": "weak",
+      "detectedTask": "translation",
+      "after": 93,
+      "ms": 0.10539999999997463,
+      "issues": 3
+    },
+    {
+      "prompt": "You are a patient computer science teacher. Explain blockchain to a 15-year-old beginner in under 150 words, using one real-world analogy, and end with 2 bullet points on where it is used today.",
+      "quality": "strong",
+      "task": "explanation",
+      "score": 64,
+      "predicted": "strong",
+      "detectedTask": "explanation",
+      "after": 86,
+      "ms": 0.07909999999998263,
+      "issues": 1
+    },
+    {
+      "prompt": "You are a startup mentor. I am a college student with a budget of Rs. 20,000 and skills in web development. Suggest 5 startup ideas I could launch in 3 months. Format: numbered list, each with a one-line rationale and first step.",
+      "quality": "strong",
+      "task": "brainstorming",
+      "score": 69,
+      "predicted": "strong",
+      "detectedTask": "brainstorming",
+      "after": 88,
+      "ms": 0.10659999999995762,
+      "issues": 2
+    },
+    {
+      "prompt": "You are an HR communication expert. Write a polite email to my manager requesting 3 days of leave from 14 to 16 October for a family function. Keep it under 120 words, formal tone, and include a line about handing over my tasks.",
+      "quality": "strong",
+      "task": "writing",
+      "score": 68,
+      "predicted": "strong",
+      "detectedTask": "writing",
+      "after": 95,
+      "ms": 0.08510000000001128,
+      "issues": 2
+    },
+    {
+      "prompt": "You are a database performance expert. My PostgreSQL query below takes 8 seconds on a 2 million row table. Explain step by step why it is slow and give an optimized version in a code block.\n```sql\nSELECT * FROM orders WHERE LOWER(email) = 'a@b.com';\n```",
+      "quality": "strong",
+      "task": "coding",
+      "score": 72,
+      "predicted": "strong",
+      "detectedTask": "coding",
+      "after": 83,
+      "ms": 0.20210000000002992,
+      "issues": 2
+    },
+    {
+      "prompt": "Act as a data science tutor. Explain the difference between supervised and unsupervised learning for final-year students. Use a table with 3 rows, then give 1 example of each. Avoid heavy maths.",
+      "quality": "strong",
+      "task": "explanation",
+      "score": 64,
+      "predicted": "strong",
+      "detectedTask": "explanation",
+      "after": 85,
+      "ms": 0.8278999999999996,
+      "issues": 1
+    }
+  ],
+  "live": null
+}
