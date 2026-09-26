@@ -84,3 +84,56 @@ test("parseJson tolerates code fences and stray text", () => {
   assert.deepEqual(parseJson('Here you go: {"a":2} hope it helps'), { a: 2 });
   assert.throws(() => parseJson("no json here"));
 });
+
+test("pairwise judge maps shuffled answers back to the right side", async () => {
+  const { pairwiseJudge } = await import("../lib/judge.ts");
+  const reply = {
+    answer_1: { scores: { relevance: 9, completeness: 9, accuracy: 9, clarity: 9, conciseness: 9, instruction_following: 9 }, feedback: "first" },
+    answer_2: { scores: { relevance: 5, completeness: 5, accuracy: 5, clarity: 5, conciseness: 5, instruction_following: 5 }, feedback: "second" },
+    winner: "answer_1",
+    reason: "first is better",
+  };
+  const realFetch = globalThis.fetch;
+  let sent = "";
+  globalThis.fetch = (async (_url: string, init: { body: string }) => {
+    sent = JSON.parse(init.body).messages[1].content;
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(reply) } }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const cfg = { apiKey: "test", baseUrl: "http://llm.test", model: "m" };
+    const swapped = await pairwiseJudge(cfg, "req", "ORIGINAL ANSWER", "OPTIMIZED ANSWER", { swap: true });
+    assert.ok(sent.indexOf("OPTIMIZED ANSWER") < sent.indexOf("ORIGINAL ANSWER"));
+    assert.equal(swapped.winner, "optimized");
+    assert.equal(swapped.optimized.overall, 90);
+    assert.equal(swapped.original.overall, 50);
+    const straight = await pairwiseJudge(cfg, "req", "ORIGINAL ANSWER", "OPTIMIZED ANSWER", { swap: false });
+    assert.equal(straight.winner, "original");
+    assert.equal(straight.original.feedback, "first");
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("combined verdict is decided by averaged scores, not the free-choice pick", async () => {
+  const { combineVerdicts, toJudgeScore } = await import("../lib/judge.ts");
+  const s = (n: number) => toJudgeScore({ scores: { relevance: n, completeness: n, accuracy: n, clarity: n, conciseness: n, instruction_following: n } });
+  const pass = (winner: "original" | "optimized" | "tie", o: number, p: number) => ({ original: s(o), optimized: s(p), winner, reason: "r", shownFirst: "original" as const });
+  const agree = combineVerdicts(pass("optimized", 8, 9), pass("optimized", 7, 9));
+  assert.equal(agree.winner, "optimized");
+  assert.equal(agree.consistent, true);
+  assert.equal(agree.original.overall, 75);
+  const disagree = combineVerdicts(pass("original", 9, 8), pass("optimized", 8, 9));
+  assert.equal(disagree.winner, "tie");
+  assert.equal(disagree.consistent, false);
+  // The judge picks "original" in both passes, but its own scores favour the optimized answer.
+  const drift = combineVerdicts(pass("original", 8, 9), pass("original", 8, 9));
+  assert.equal(drift.winner, "optimized");
+  assert.deepEqual(drift.modelPicks, ["original", "original"]);
+});
+
+test("judge text never shows positional labels to the user", async () => {
+  const { toJudgeScore } = await import("../lib/judge.ts");
+  const f = toJudgeScore({ feedback: "Answer 1 is thorough but longer than answer 2." }).feedback;
+  assert.doesNotMatch(f, /answer[ _]?[12]/i);
+  assert.match(f, /^This answer is thorough but longer than the other answer\.$/);
+});

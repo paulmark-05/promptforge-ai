@@ -48,11 +48,34 @@ Get a free Groq key at https://console.groq.com/keys. Without a key, the app run
 ## Tests and benchmark
 
 ```bash
-npm test            # 11 unit tests
+npm test            # 14 unit tests
 npm run benchmark   # scores 20 labelled prompts + 5 injection attempts
 ```
 
-With `LLM_API_KEY` set, the benchmark also optimizes the 10 weak prompts with the LLM, generates responses for the original and optimized versions, and scores both with the judge. Results are written to `benchmark-results.json`.
+With `LLM_API_KEY` set, the benchmark also optimizes the 10 weak prompts with the LLM, generates answers for the original and optimized versions, and compares them head to head in both orders. Results are written to `benchmark-results.json`.
+
+## Architecture
+
+![Architecture](docs/screenshots/00-architecture.png)
+
+## Results
+
+From `npm run benchmark` (20 hand-labelled prompts, 5 injection attempts; live runs on Groq `openai/gpt-oss-120b`):
+
+| Metric | Result |
+|---|---|
+| Weak vs strong prompt classification | 95% (19/20) |
+| Prompt-injection detection | 5/5, 0 false positives |
+| Prompt score of weak prompts after LLM optimization | 21.8 → 71–81 |
+| Answer quality, original vs optimized (head-to-head judge, both orders) | 88.8 vs 89.4, within judging noise |
+| Output tokens per answer, original → optimized | 993 → 529 (−47%) |
+| Latency per answer, original → optimized | 2.5 s → 1.5 s (−39%) |
+
+On a strong model, optimized prompts give answers of the same quality that are shorter, faster and more structured.
+
+### How answers are compared
+
+Both answers go to one judge call and are scored against the **original** request on relevance, completeness, accuracy, clarity, conciseness and instruction following. Each pair is judged twice with the order swapped, because LLM judges favour whichever answer they read first. The winner is decided from the averaged criterion scores, not the judge's free-choice pick (which leans towards longer answers), and only when both orders agree. Otherwise the result is reported as too close to call.
 
 ## Architecture
 
@@ -80,12 +103,14 @@ app/
   api/analyze/route.ts   rule-based analysis + optional AI critique
   api/optimize/route.ts  LLM rewrite, falls back to templates
   api/generate/route.ts  runs a prompt on the LLM
-  api/evaluate/route.ts  LLM-as-judge + rule-based response checks
+  api/evaluate/route.ts  LLM judge + rule checks for a single answer
+  api/compare/route.ts   head-to-head judge of two answers (one order per call)
   api/status/route.ts    reports whether a server key is configured
 lib/
   analyzer.ts            8-dimension scoring, issues, task type, injection detection
   optimizer.ts           offline template optimizer and technique list
   metrics.ts             response checks (word limit, JSON, table, readability…)
+  judge.ts               pairwise judge, both-order combining, bias handling
   llm.ts                 OpenAI-compatible client + tolerant JSON parser
   prompts.ts             system prompts for critic, optimizer and judge
 tests/                   unit tests

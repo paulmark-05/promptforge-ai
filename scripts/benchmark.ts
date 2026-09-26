@@ -1,14 +1,15 @@
 // Benchmark for PromptForge AI.
 //   npm run benchmark                 -> offline metrics (analyzer + template optimizer)
 //   LLM_API_KEY=... npm run benchmark -> also runs original vs optimized prompts on the
-//                                        LLM and scores both responses with the judge.
+//                                        LLM and compares both answers head to head.
 // Results are printed and written to benchmark-results.json.
 
 import { writeFileSync } from "node:fs";
 import { analyzePrompt, type TaskType } from "../lib/analyzer.ts";
 import { optimizeOffline, TECHNIQUES } from "../lib/optimizer.ts";
 import { chat, getConfig, parseJson } from "../lib/llm.ts";
-import { JUDGE_SYSTEM, OPTIMIZER_SYSTEM, wrapPrompt } from "../lib/prompts.ts";
+import { OPTIMIZER_SYSTEM, wrapPrompt } from "../lib/prompts.ts";
+import { judgeBothOrders } from "../lib/judge.ts";
 
 // Hand-labelled dataset: quality = my own judgement before running the tool.
 const DATASET: { prompt: string; quality: "weak" | "strong"; task: TaskType }[] = [
@@ -127,9 +128,25 @@ async function main() {
         const optimized = parseJson<{ optimized_prompt: string }>(o.text).optimized_prompt;
         const ro = await gen(cfg, w.prompt);
         const rn = await gen(cfg, optimized);
-        const jo = await judge(cfg, w.prompt, ro.text);
-        const jn = await judge(cfg, w.prompt, rn.text);
-        liveRows.push({ prompt: w.prompt.slice(0, 40), promptScoreBefore: w.score, promptScoreAfter: analyzePrompt(optimized).score, judgeOriginal: jo, judgeOptimized: jn, latencyS: r2((ro.latencyMs + rn.latencyMs) / 2000) });
+        // Head-to-head against the original request, judged in both orders to cancel position bias.
+        const { combined: v, passes } = await judgeBothOrders(cfg, w.prompt, ro.text, rn.text, PATIENT);
+        liveRows.push({
+          prompt: w.prompt.slice(0, 40),
+          promptScoreBefore: w.score,
+          promptScoreAfter: analyzePrompt(optimized).score,
+          judgeOriginal: v.original.overall,
+          judgeOptimized: v.optimized.overall,
+          winner: v.winner,
+          consistent: v.consistent,
+          modelPicks: v.modelPicks,
+          passScores: passes.map((x) => ({ first: x.shownFirst, original: x.original.overall, optimized: x.optimized.overall })),
+          firstShownWonPass1: passes[0].winner === passes[0].shownFirst,
+          firstShownWonPass2: passes[1].winner === passes[1].shownFirst,
+          tokensOriginal: ro.tokens?.completion ?? 0,
+          tokensOptimized: rn.tokens?.completion ?? 0,
+          latencyOriginalS: r2(ro.latencyMs / 1000),
+          latencyOptimizedS: r2(rn.latencyMs / 1000),
+        });
         console.log(liveRows.at(-1));
       } catch (e) {
         console.error("failed:", w.prompt, (e as Error).message);
@@ -142,8 +159,16 @@ async function main() {
       avgPromptScoreAfterLLM: r2(avg(liveRows.map((r) => r.promptScoreAfter))),
       avgJudgeOriginal: r2(avg(liveRows.map((r) => r.judgeOriginal))),
       avgJudgeOptimized: r2(avg(liveRows.map((r) => r.judgeOptimized))),
-      optimizedWins: liveRows.filter((r) => r.judgeOptimized > r.judgeOriginal).length,
-      avgGenerationLatencyS: r2(avg(liveRows.map((r) => r.latencyS))),
+      winsOptimized: liveRows.filter((r) => r.winner === "optimized").length,
+      winsOriginal: liveRows.filter((r) => r.winner === "original").length,
+      ties: liveRows.filter((r) => r.winner === "tie").length,
+      consistentVerdicts: liveRows.filter((r) => r.consistent).length,
+      freePickContradictsScores: liveRows.reduce((n, r) => n + r.modelPicks.filter((m) => m !== "tie" && m !== r.winner).length, 0),
+      firstPositionWinsAcrossPasses: `${liveRows.reduce((n, r) => n + Number(r.firstShownWonPass1) + Number(r.firstShownWonPass2), 0)}/${liveRows.length * 2}`,
+      avgTokensOriginal: Math.round(avg(liveRows.map((r) => r.tokensOriginal))),
+      avgTokensOptimized: Math.round(avg(liveRows.map((r) => r.tokensOptimized))),
+      avgLatencyOriginalS: r2(avg(liveRows.map((r) => r.latencyOriginalS))),
+      avgLatencyOptimizedS: r2(avg(liveRows.map((r) => r.latencyOptimizedS))),
       rows: liveRows,
     };
     console.log(live);
@@ -159,18 +184,7 @@ async function gen(cfg: NonNullable<ReturnType<typeof getConfig>>, prompt: strin
   return chat(cfg, [
     { role: "system", content: "You are a helpful assistant. Follow the user's instructions carefully." },
     { role: "user", content: prompt },
-  ], { temperature: 0.7, maxTokens: 3000, ...PATIENT });
-}
-
-// The judge always sees the ORIGINAL user intent, so both answers are scored against the same need.
-async function judge(cfg: NonNullable<ReturnType<typeof getConfig>>, prompt: string, response: string) {
-  const r = await chat(cfg, [
-    { role: "system", content: JUDGE_SYSTEM },
-    { role: "user", content: `<prompt>\n${prompt}\n</prompt>\n\n<response>\n${response}\n</response>` },
-  ], { temperature: 0, json: true, ...PATIENT });
-  const s = parseJson<{ scores: Record<string, number> }>(r.text).scores;
-  const vals = Object.values(s).map(Number).filter(Number.isFinite);
-  return Math.round(avg(vals) * 10);
+  ], { temperature: 0.3, maxTokens: 3000, ...PATIENT });
 }
 
 main();

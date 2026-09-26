@@ -7,12 +7,15 @@ import type { ResponseMetrics } from "../lib/metrics";
 import { SAMPLE_PROMPTS } from "../lib/templates";
 import { Bar, CountUp, Icon, Logo, ScoreRing, SeverityTag, Spinner, scoreColor, scoreTone } from "../components/ui";
 import { HeroCircuit } from "../components/HeroCircuit";
+import { combineVerdicts, type PairwiseResult } from "../lib/judge";
 
 interface Critique { summary?: string; strengths?: string[]; weaknesses?: string[]; suggestions?: string[] }
 interface OptResult { optimizedPrompt: string; changes: Change[]; rationale: string; mode: "llm" | "offline"; before: number; after: number; warning?: string }
 interface Judge { scores: Record<string, number>; overall: number; feedback: string; improvements: string[] }
 interface EvalResult { metrics: ResponseMetrics; judge: Judge | null; warning?: string }
 interface RunResult { response: string; latencyMs: number; tokens?: { prompt: number; completion: number }; evaluation: EvalResult }
+type Pass = PairwiseResult & { metrics: { original: ResponseMetrics; optimized: ResponseMetrics } };
+interface Runs { original: RunResult; optimized: RunResult; winner: PairwiseResult["winner"]; reason: string; consistent: boolean }
 interface HistoryItem { id: string; at: number; original: string; optimized: string; before: number; after: number; evalOriginal?: number; evalOptimized?: number }
 
 const KEY_STORE = "pf_user_key";
@@ -23,6 +26,7 @@ const CRITERIA_LABELS: Record<string, string> = {
   completeness: "Completeness",
   accuracy: "Accuracy",
   clarity: "Clarity",
+  conciseness: "Conciseness",
   instruction_following: "Instruction following",
 };
 
@@ -56,7 +60,7 @@ export default function Home() {
   const [optText, setOptText] = useState("");
   const [optimizing, setOptimizing] = useState(false);
 
-  const [runs, setRuns] = useState<{ original: RunResult; optimized: RunResult } | null>(null);
+  const [runs, setRuns] = useState<Runs | null>(null);
   const [running, setRunning] = useState(false);
   const [manualResponse, setManualResponse] = useState("");
   const [manualEval, setManualEval] = useState<EvalResult | null>(null);
@@ -150,10 +154,9 @@ export default function Home() {
     }
   }
 
-  async function runOne(p: string): Promise<RunResult> {
-    const gen = await api<{ text: string; latencyMs: number; tokens?: RunResult["tokens"] }>("/api/generate", { prompt: p });
-    const evaluation = await api<EvalResult>("/api/evaluate", { prompt: p, response: gen.text });
-    return { response: gen.text, latencyMs: gen.latencyMs, tokens: gen.tokens, evaluation };
+  async function generate(p: string) {
+    // Low temperature so the two answers differ because of the prompt, not random sampling.
+    return api<{ text: string; latencyMs: number; tokens?: RunResult["tokens"] }>("/api/generate", { prompt: p, temperature: 0.3 });
   }
 
   async function runComparison() {
@@ -161,14 +164,19 @@ export default function Home() {
     setError(null);
     try {
       // Sequential rather than parallel: free-tier keys have a low tokens-per-minute limit.
-      const original = await runOne(prompt);
-      const optimized = await runOne(optText);
-      setRuns({ original, optimized });
+      const a = await generate(prompt);
+      const b = await generate(optText);
+      // Head-to-head judging against the ORIGINAL request, once in each order to cancel position bias.
+      const body = { originalPrompt: prompt, optimizedPrompt: optText, originalAnswer: a.text, optimizedAnswer: b.text };
+      const p1 = await api<Pass>("/api/compare", { ...body, swap: false });
+      const p2 = await api<Pass>("/api/compare", { ...body, swap: true });
+      const v = { ...combineVerdicts(p1, p2), metrics: p1.metrics };
+      const original: RunResult = { response: a.text, latencyMs: a.latencyMs, tokens: a.tokens, evaluation: { metrics: v.metrics.original, judge: { ...v.original, improvements: [] } } };
+      const optimized: RunResult = { response: b.text, latencyMs: b.latencyMs, tokens: b.tokens, evaluation: { metrics: v.metrics.optimized, judge: { ...v.optimized, improvements: [] } } };
+      setRuns({ original, optimized, winner: v.winner, reason: v.reason, consistent: v.consistent });
       setHistory((h) => {
         const next = h.map((item, i) =>
-          i === 0 && item.optimized === optText
-            ? { ...item, evalOriginal: original.evaluation.judge?.overall, evalOptimized: optimized.evaluation.judge?.overall }
-            : item,
+          i === 0 && item.optimized === optText ? { ...item, evalOriginal: v.original.overall, evalOptimized: v.optimized.overall } : item,
         );
         save(HISTORY_STORE, next);
         return next;
@@ -458,15 +466,15 @@ export default function Home() {
                 <div className="panel">
                   <div className="panel-head">
                     <h3>Compare the answers</h3>
-                    <span className="hint">LLM judge on 5 criteria plus rule-based checks</span>
+                    <span className="hint">Head-to-head LLM judge against your original request</span>
                   </div>
                   {live ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                       <p style={{ color: "var(--text-2)", fontSize: 14, maxWidth: 520 }}>
-                        Runs the original and optimized prompts on the same model, then scores each answer.
+                        Runs both prompts on the same model, then one judge compares the two answers against what you originally asked, including how concise they are.
                       </p>
                       <button className="btn primary" disabled={running || !optText.trim()} onClick={runComparison}>
-                        {running ? <Spinner /> : <Icon.play />} {running ? "Generating and judging" : "Run both and compare"}
+                        {running ? <Spinner /> : <Icon.play />} {running ? "Generating and judging (4 steps)" : "Run both and compare"}
                       </button>
                     </div>
                   ) : (
@@ -601,31 +609,61 @@ function AnalysisSkeleton() {
   );
 }
 
-function Comparison({ runs }: { runs: { original: RunResult; optimized: RunResult } }) {
-  const a = runs.original.evaluation.judge?.overall;
-  const b = runs.optimized.evaluation.judge?.overall;
-  const winner = a != null && b != null ? (b > a ? "optimized" : a > b ? "original" : "tie") : null;
+function Comparison({ runs }: { runs: Runs }) {
+  const a = runs.original.evaluation.judge!.overall;
+  const b = runs.optimized.evaluation.judge!.overall;
+  const { winner } = runs;
+  const ta = runs.original.tokens?.completion;
+  const tb = runs.optimized.tokens?.completion;
+  const saving = ta && tb ? 1 - tb / ta : null; // share of output tokens saved by the optimized prompt
+  const speed = runs.optimized.latencyMs > 0 ? runs.original.latencyMs / runs.optimized.latencyMs : null;
+  const similar = Math.abs(b - a) <= 3;
+  const cheaper = saving != null && saving >= 0.3;
+  const headline =
+    winner === "optimized"
+      ? "The optimized answer scored higher."
+      : winner === "original"
+        ? similar && cheaper
+          ? `Near-identical quality, and the optimized answer used ${Math.round(saving! * 100)}% fewer tokens.`
+          : "The original answer scored higher. Try different techniques and run again."
+        : cheaper
+          ? `No clear quality difference, and the optimized answer used ${Math.round(saving! * 100)}% fewer tokens.`
+          : runs.consistent
+            ? "Both answers scored about the same."
+            : "Too close to call: the two judging orders disagreed.";
   return (
     <>
-      {winner && (
-        <div className="verdict">
-          <span className="num" style={{ font: "700 28px var(--sans)", color: scoreColor(a!) }}><CountUp value={a!} /></span>
-          <span style={{ color: "var(--muted)" }}><Icon.arrow /></span>
-          <span className="num" style={{ font: "700 28px var(--sans)", color: scoreColor(b!) }}><CountUp value={b!} /></span>
-          <span className="msg">
-            {winner === "optimized"
-              ? `The optimized prompt scored ${b! - a!} points higher.`
-              : winner === "tie"
-                ? "Both answers scored the same."
-                : `The original scored ${a! - b!} points higher. Try adjusting the techniques and run again.`}
-          </span>
+      <div className="verdict">
+        <span className="num" style={{ font: "700 28px var(--sans)", color: scoreColor(a) }}><CountUp value={a} /></span>
+        <span style={{ color: "var(--muted)" }}><Icon.arrow /></span>
+        <span className="num" style={{ font: "700 28px var(--sans)", color: scoreColor(b) }}><CountUp value={b} /></span>
+        <div className="verdict-text">
+          <span className="msg">{headline}</span>
+          {runs.reason && <span className="why">{runs.reason}</span>}
+        </div>
+      </div>
+      {saving != null && speed != null && (
+        <div className="efficiency">
+          <Metric label="Output tokens" a={ta!} b={tb!} better={tb! <= ta!} note={`${Math.abs(Math.round(saving * 100))}% ${saving >= 0 ? "fewer" : "more"}`} />
+          <Metric label="Latency" a={`${(runs.original.latencyMs / 1000).toFixed(1)}s`} b={`${(runs.optimized.latencyMs / 1000).toFixed(1)}s`} better={speed >= 1} note={speed >= 1 ? `${speed.toFixed(1)}x faster` : `${(1 / speed).toFixed(1)}x slower`} />
+          <Metric label="Words" a={runs.original.evaluation.metrics.wordCount} b={runs.optimized.evaluation.metrics.wordCount} better={runs.optimized.evaluation.metrics.wordCount <= runs.original.evaluation.metrics.wordCount} />
         </div>
       )}
-      <div className="eval-grid" style={winner ? undefined : { marginTop: 24 }}>
+      <div className="eval-grid">
         <EvalCard title="Original prompt" run={runs.original} result={runs.original.evaluation} winner={winner === "original"} />
         <EvalCard title="Optimized prompt" run={runs.optimized} result={runs.optimized.evaluation} winner={winner === "optimized"} />
       </div>
     </>
+  );
+}
+
+function Metric({ label, a, b, better, note }: { label: string; a: number | string; b: number | string; better: boolean; note?: string }) {
+  return (
+    <div className="metric">
+      <span className="label">{label}</span>
+      <span className="vals"><b>{a}</b> <Icon.arrow /> <b>{b}</b></span>
+      {note && <span className={`tag ${better ? "good" : "warn"}`}>{note}</span>}
+    </div>
   );
 }
 
@@ -634,7 +672,7 @@ function EvalCard({ title, run, result, winner }: { title: string; run?: RunResu
   return (
     <div className="eval-card">
       <div className="top">
-        <h4>{title} {winner && <span className="tag good">Higher score</span>}</h4>
+        <h4>{title} {winner && <span className="tag good">Preferred</span>}</h4>
         {judge && <span className="big" style={{ color: scoreColor(judge.overall) }}><CountUp value={judge.overall} /></span>}
       </div>
       {judge && (
@@ -643,6 +681,7 @@ function EvalCard({ title, run, result, winner }: { title: string; run?: RunResu
         </div>
       )}
       {judge?.feedback && <p className="feedback">{judge.feedback}</p>}
+      <div className="checks-label">Rules in its own prompt</div>
       <ul className="checks">
         {metrics.checks.map((c) => (
           <li key={c.label}>

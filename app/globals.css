@@ -367,3 +367,16 @@ footer { position: relative; z-index: 1; border-top: 1px solid var(--border); pa
   html { scroll-behavior: auto; }
   .circuit .pulse { display: none; }
 }
+
+/* Comparison verdict and efficiency strip */
+.verdict-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.verdict .why { font-size: 13px; color: var(--muted); }
+.efficiency { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); margin-bottom: var(--s4); }
+.metric { display: flex; flex-direction: column; gap: var(--s2); padding: var(--s3) var(--s4); border-radius: var(--radius); background: var(--surface-2); animation: rise 0.4s var(--ease) both; }
+.metric .label { font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.metric .vals { display: flex; align-items: center; gap: var(--s2); color: var(--muted); font-size: 13px; }
+.metric .vals b { font: 600 15px var(--mono); color: var(--text); }
+.metric .tag { align-self: flex-start; }
+.checks-label { font: 500 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-top: var(--s4); }
+.checks-label + .checks { margin-top: var(--s2); }
+@media (max-width: 720px) { .efficiency { grid-template-columns: minmax(0, 1fr); } }

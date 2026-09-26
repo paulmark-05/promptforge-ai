@@ -1,5 +1,5 @@
 {
-  "runAt": "2026-09-25T23:06:01.272Z",
+  "runAt": "2026-09-26T16:16:08.416Z",
   "offline": {
     "prompts": 20,
     "avgScoreWeak": 21.8,
@@ -10,7 +10,7 @@
     "injectionFalsePositives": "0/20",
     "avgUpliftWeakOffline": 65.4,
     "avgScoreAfterOfflineWeak": 87.2,
-    "avgAnalyzerMs": 0.96
+    "avgAnalyzerMs": 0.55
   },
   "rows": [
     {
@@ -21,7 +21,7 @@
       "predicted": "weak",
       "detectedTask": "explanation",
       "after": 91,
-      "ms": 14.54649999999998,
+      "ms": 9.123999999999995,
       "issues": 5
     },
     {
@@ -32,7 +32,7 @@
       "predicted": "weak",
       "detectedTask": "coding",
       "after": 89,
-      "ms": 0.24549999999999272,
+      "ms": 0.12769999999997594,
       "issues": 5
     },
     {
@@ -43,7 +43,7 @@
       "predicted": "weak",
       "detectedTask": "writing",
       "after": 77,
-      "ms": 0.6069999999999709,
+      "ms": 0.5327000000000055,
       "issues": 5
     },
     {
@@ -54,7 +54,7 @@
       "predicted": "weak",
       "detectedTask": "summarization",
       "after": 91,
-      "ms": 0.32220000000000937,
+      "ms": 0.2266999999999939,
       "issues": 5
     },
     {
@@ -65,7 +65,7 @@
       "predicted": "weak",
       "detectedTask": "analysis",
       "after": 87,
-      "ms": 1.5696000000000367,
+      "ms": 0.06799999999998363,
       "issues": 5
     },
     {
@@ -76,7 +76,7 @@
       "predicted": "weak",
       "detectedTask": "writing",
       "after": 82,
-      "ms": 0.7086999999999648,
+      "ms": 0.0747000000000071,
       "issues": 4
     },
     {
@@ -87,7 +87,7 @@
       "predicted": "weak",
       "detectedTask": "brainstorming",
       "after": 89,
-      "ms": 0.05570000000000164,
+      "ms": 0.03630000000001132,
       "issues": 5
     },
     {
@@ -98,7 +98,7 @@
       "predicted": "weak",
       "detectedTask": "translation",
       "after": 93,
-      "ms": 0.07670000000001664,
+      "ms": 0.03700000000000614,
       "issues": 5
     },
     {
@@ -109,7 +109,7 @@
       "predicted": "weak",
       "detectedTask": "explanation",
       "after": 91,
-      "ms": 0.05009999999998627,
+      "ms": 0.03370000000001028,
       "issues": 6
     },
     {
@@ -120,7 +120,7 @@
       "predicted": "weak",
       "detectedTask": "coding",
       "after": 82,
-      "ms": 0.06439999999997781,
+      "ms": 0.05189999999998918,
       "issues": 4
     },
     {
@@ -131,7 +131,7 @@
       "predicted": "strong",
       "detectedTask": "coding",
       "after": 92,
-      "ms": 0.08119999999996708,
+      "ms": 0.06299999999998818,
       "issues": 2
     },
     {
@@ -142,7 +142,7 @@
       "predicted": "strong",
       "detectedTask": "summarization",
       "after": 86,
-      "ms": 0.07819999999998117,
+      "ms": 0.039900000000017144,
       "issues": 1
     },
     {
@@ -153,7 +153,7 @@
       "predicted": "strong",
       "detectedTask": "writing",
       "after": 90,
-      "ms": 0.09739999999999327,
+      "ms": 0.061199999999985266,
       "issues": 1
     },
     {
@@ -164,7 +164,7 @@
       "predicted": "strong",
       "detectedTask": "analysis",
       "after": 89,
-      "ms": 0.08940000000001191,
+      "ms": 0.048900000000003274,
       "issues": 2
     },
     {
@@ -175,7 +175,7 @@
       "predicted": "weak",
       "detectedTask": "translation",
       "after": 93,
-      "ms": 0.09359999999998081,
+      "ms": 0.04990000000000805,
       "issues": 3
     },
     {
@@ -186,7 +186,7 @@
       "predicted": "strong",
       "detectedTask": "explanation",
       "after": 86,
-      "ms": 0.09890000000001464,
+      "ms": 0.04249999999998977,
       "issues": 1
     },
     {
@@ -197,7 +197,7 @@
       "predicted": "strong",
       "detectedTask": "brainstorming",
       "after": 88,
-      "ms": 0.07650000000001,
+      "ms": 0.048799999999999955,
       "issues": 2
     },
     {
@@ -208,7 +208,7 @@
       "predicted": "strong",
       "detectedTask": "writing",
       "after": 95,
-      "ms": 0.1057999999999879,
+      "ms": 0.05259999999998399,
       "issues": 2
     },
     {
@@ -219,7 +219,7 @@
       "predicted": "strong",
       "detectedTask": "coding",
       "after": 83,
-      "ms": 0.07990000000000919,
+      "ms": 0.11209999999999809,
       "issues": 2
     },
     {
@@ -230,100 +230,309 @@
       "predicted": "strong",
       "detectedTask": "explanation",
       "after": 85,
-      "ms": 0.07869999999996935,
+      "ms": 0.09120000000001482,
       "issues": 1
     }
   ],
   "live": {
     "model": "openai/gpt-oss-120b",
-    "n": 10,
-    "avgPromptScoreBefore": 21.8,
-    "avgPromptScoreAfterLLM": 80.6,
-    "avgJudgeOriginal": 91.6,
-    "avgJudgeOptimized": 90.2,
-    "optimizedWins": 2,
-    "avgGenerationLatencyS": 2.07,
+    "n": 9,
+    "avgPromptScoreBefore": 21,
+    "avgPromptScoreAfterLLM": 71.22,
+    "avgJudgeOriginal": 88.78,
+    "avgJudgeOptimized": 89.44,
+    "winsOptimized": 1,
+    "winsOriginal": 1,
+    "ties": 7,
+    "consistentVerdicts": 2,
+    "freePickContradictsScores": 15,
+    "firstPositionWinsAcrossPasses": "14/18",
+    "avgTokensOriginal": 993,
+    "avgTokensOptimized": 529,
+    "avgLatencyOriginalS": 2.51,
+    "avgLatencyOptimizedS": 1.54,
     "rows": [
       {
         "prompt": "explain machine learning",
         "promptScoreBefore": 17,
-        "promptScoreAfter": 79,
-        "judgeOriginal": 96,
+        "promptScoreAfter": 64,
+        "judgeOriginal": 93,
         "judgeOptimized": 90,
-        "latencyS": 3.83
+        "winner": "tie",
+        "consistent": false,
+        "modelPicks": [
+          "original",
+          "optimized"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 93,
+            "optimized": 85
+          },
+          {
+            "first": "optimized",
+            "original": 93,
+            "optimized": 95
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": true,
+        "tokensOriginal": 2181,
+        "tokensOptimized": 835,
+        "latencyOriginalS": 4.99,
+        "latencyOptimizedS": 2.24
       },
       {
         "prompt": "write a python function to check if a st",
         "promptScoreBefore": 25,
-        "promptScoreAfter": 81,
-        "judgeOriginal": 94,
-        "judgeOptimized": 90,
-        "latencyS": 1.31
+        "promptScoreAfter": 61,
+        "judgeOriginal": 90,
+        "judgeOptimized": 88,
+        "winner": "tie",
+        "consistent": false,
+        "modelPicks": [
+          "original",
+          "optimized"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 88,
+            "optimized": 83
+          },
+          {
+            "first": "optimized",
+            "original": 92,
+            "optimized": 92
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": true,
+        "tokensOriginal": 448,
+        "tokensOptimized": 620,
+        "latencyOriginalS": 1.44,
+        "latencyOptimizedS": 1.68
       },
       {
         "prompt": "Write something good for my bakery's ins",
         "promptScoreBefore": 24,
-        "promptScoreAfter": 81,
-        "judgeOriginal": 90,
-        "judgeOptimized": 90,
-        "latencyS": 0.77
+        "promptScoreAfter": 75,
+        "judgeOriginal": 79,
+        "judgeOptimized": 83,
+        "winner": "tie",
+        "consistent": false,
+        "modelPicks": [
+          "original",
+          "optimized"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 85,
+            "optimized": 77
+          },
+          {
+            "first": "optimized",
+            "original": 73,
+            "optimized": 88
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": true,
+        "tokensOriginal": 350,
+        "tokensOptimized": 251,
+        "latencyOriginalS": 1.19,
+        "latencyOptimizedS": 0.98
       },
       {
         "prompt": "Summarize the causes of World War 1",
         "promptScoreBefore": 26,
-        "promptScoreAfter": 87,
-        "judgeOriginal": 88,
-        "judgeOptimized": 92,
-        "latencyS": 1.84
+        "promptScoreAfter": 71,
+        "judgeOriginal": 90,
+        "judgeOptimized": 94,
+        "winner": "optimized",
+        "consistent": true,
+        "modelPicks": [
+          "original",
+          "optimized"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 87,
+            "optimized": 90
+          },
+          {
+            "first": "optimized",
+            "original": 92,
+            "optimized": 97
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": true,
+        "tokensOriginal": 751,
+        "tokensOptimized": 355,
+        "latencyOriginalS": 2.01,
+        "latencyOptimizedS": 1.2
       },
       {
         "prompt": "Compare React and Vue, which one is bett",
         "promptScoreBefore": 21,
-        "promptScoreAfter": 82,
-        "judgeOriginal": 96,
-        "judgeOptimized": 90,
-        "latencyS": 3.48
+        "promptScoreAfter": 78,
+        "judgeOriginal": 92,
+        "judgeOptimized": 89,
+        "winner": "original",
+        "consistent": true,
+        "modelPicks": [
+          "original",
+          "original"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 87,
+            "optimized": 85
+          },
+          {
+            "first": "optimized",
+            "original": 97,
+            "optimized": 92
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": false,
+        "tokensOriginal": 1294,
+        "tokensOptimized": 875,
+        "latencyOriginalS": 3.16,
+        "latencyOptimizedS": 2.31
       },
       {
         "prompt": "write an email to my manager asking for ",
         "promptScoreBefore": 30,
-        "promptScoreAfter": 99,
-        "judgeOriginal": 90,
-        "judgeOptimized": 90,
-        "latencyS": 0.87
+        "promptScoreAfter": 66,
+        "judgeOriginal": 92,
+        "judgeOptimized": 92,
+        "winner": "tie",
+        "consistent": false,
+        "modelPicks": [
+          "optimized",
+          "original"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 90,
+            "optimized": 92
+          },
+          {
+            "first": "optimized",
+            "original": 93,
+            "optimized": 92
+          }
+        ],
+        "firstShownWonPass1": false,
+        "firstShownWonPass2": false,
+        "tokensOriginal": 274,
+        "tokensOptimized": 174,
+        "latencyOriginalS": 0.87,
+        "latencyOptimizedS": 0.49
       },
       {
         "prompt": "give me startup ideas",
         "promptScoreBefore": 17,
-        "promptScoreAfter": 83,
-        "judgeOriginal": 90,
-        "judgeOptimized": 90,
-        "latencyS": 3.84
+        "promptScoreAfter": 76,
+        "judgeOriginal": 85,
+        "judgeOptimized": 87,
+        "winner": "tie",
+        "consistent": false,
+        "modelPicks": [
+          "original",
+          "optimized"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 87,
+            "optimized": 87
+          },
+          {
+            "first": "optimized",
+            "original": 82,
+            "optimized": 87
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": true,
+        "tokensOriginal": 2474,
+        "tokensOptimized": 1212,
+        "latencyOriginalS": 5.62,
+        "latencyOptimizedS": 3
       },
       {
         "prompt": "translate hello how are you in french",
         "promptScoreBefore": 22,
-        "promptScoreAfter": 66,
-        "judgeOriginal": 90,
-        "judgeOptimized": 90,
-        "latencyS": 0.59
+        "promptScoreAfter": 68,
+        "judgeOriginal": 92,
+        "judgeOptimized": 94,
+        "winner": "tie",
+        "consistent": false,
+        "modelPicks": [
+          "original",
+          "optimized"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 95,
+            "optimized": 93
+          },
+          {
+            "first": "optimized",
+            "original": 88,
+            "optimized": 95
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": true,
+        "tokensOriginal": 37,
+        "tokensOptimized": 88,
+        "latencyOriginalS": 0.56,
+        "latencyOptimizedS": 0.67
       },
       {
         "prompt": "what is blockchain",
         "promptScoreBefore": 7,
-        "promptScoreAfter": 71,
-        "judgeOriginal": 98,
-        "judgeOptimized": 90,
-        "latencyS": 2.17
-      },
-      {
-        "prompt": "fix my sql query it is slow",
-        "promptScoreBefore": 29,
-        "promptScoreAfter": 77,
-        "judgeOriginal": 84,
-        "judgeOptimized": 90,
-        "latencyS": 2.01
+        "promptScoreAfter": 82,
+        "judgeOriginal": 86,
+        "judgeOptimized": 88,
+        "winner": "tie",
+        "consistent": false,
+        "modelPicks": [
+          "original",
+          "original"
+        ],
+        "passScores": [
+          {
+            "first": "original",
+            "original": 83,
+            "optimized": 82
+          },
+          {
+            "first": "optimized",
+            "original": 88,
+            "optimized": 93
+          }
+        ],
+        "firstShownWonPass1": true,
+        "firstShownWonPass2": false,
+        "tokensOriginal": 1125,
+        "tokensOptimized": 354,
+        "latencyOriginalS": 2.73,
+        "latencyOptimizedS": 1.26
       }
-    ]
+    ],
+    "verdictRule": "winner only when both judging orders agree on direction (recomputed from stored pass scores)",
+    "firstShownPickedByFreeChoice": "14/18"
   }
 }

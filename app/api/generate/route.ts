@@ -15,7 +15,13 @@ export const POST = handle(async (req) => {
       { role: "system", content: "You are a helpful assistant. Follow the user's instructions carefully." },
       { role: "user", content: prompt },
     ],
-    { temperature: 0.7, maxTokens: 3000 },
+    { temperature: temperature(body.temperature), maxTokens: 3000 },
   );
   return NextResponse.json(r);
 });
+
+// Comparisons pass a low temperature so differences come from the prompt, not sampling.
+function temperature(t: unknown) {
+  const v = Number(t);
+  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.7;
+}

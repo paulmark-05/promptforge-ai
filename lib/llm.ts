@@ -57,8 +57,15 @@ export async function chat(
   }
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    const hint = res.status === 401 ? "Invalid API key." : res.status === 429 ? "Rate limit reached, try again shortly." : "";
-    throw new Error(`LLM request failed (${res.status}). ${hint} ${errText.slice(0, 200)}`.trim());
+    const hint =
+      res.status === 401
+        ? "Invalid API key."
+        : res.status === 429
+          ? /per day/i.test(errText)
+            ? "This API key has used its daily free-tier allowance. It resets within 24 hours; you can also add a different key."
+            : "Rate limit reached, try again in a minute."
+          : "";
+    throw new Error(hint ? `${hint} (HTTP ${res.status})` : `LLM request failed (${res.status}). ${errText.slice(0, 200)}`.trim());
   }
   const data = await res.json();
   return {
