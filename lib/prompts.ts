@@ -118,7 +118,7 @@ You will receive an image prompt inside <user_prompt> tags and the needs the use
 
 Rewrite it as one image prompt that a text-to-image model will render well:
 1. Keep the user's subject and every detail they gave. Do not add new subjects, people, text or logos.
-2. Order the description: subject and action, setting, style or medium, composition or camera, lighting and mood, colors, a few finish words.
+2. Lead with the medium and the subject together, for example "a watercolor painting of a cat" or "a studio photo of a watch", then add 2 or 3 texture words typical of that medium (for watercolor: soft washes, visible paper texture). Then setting, composition or camera, lighting and mood, colors, a few finish words. Image models follow the medium far better when it comes first.
 3. Include every confirmed need. The shape is applied separately, so do not write aspect ratios.
 4. Put anything to avoid at the end as "without ..." phrases.
 5. Use short comma-separated phrases, at most 60 words. Do not name living artists or brands.

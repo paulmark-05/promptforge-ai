@@ -190,7 +190,7 @@ test("offline image rewrite keeps the subject and adds the chosen look", async (
   const { optimizeImageOffline } = await import("../lib/image.ts");
   const { EMPTY_INTENT } = await import("../lib/intent.ts");
   const r = optimizeImageOffline("a cat", { ...EMPTY_INTENT, goal: "Watercolor painting", tone: "Warm golden hour", notes: "no text" });
-  assert.match(r.optimizedPrompt, /^a cat, watercolor painting/);
+  assert.match(r.optimizedPrompt, /^a watercolor painting of a cat, soft washes of color, visible paper texture/);
   assert.match(r.optimizedPrompt, /warm golden hour/);
   assert.match(r.optimizedPrompt, /no text$/);
 });
@@ -214,4 +214,12 @@ test("code snippets embed the prompt safely", async () => {
   assert.match(js, /content: "Say \\"hi\\""/);
   assert.match(imageSnippet("python", "a cat", "Square 1:1", 7), /seed=7/);
   assert.match(imageSnippet("curl", "a cat", undefined, 7), /Authorization: Bearer \$POLLINATIONS_API_KEY/);
+});
+
+test("image rewrite leads with the medium", async () => {
+  const { leadWithMedium } = await import("../lib/image.ts");
+  assert.equal(leadWithMedium("a cat", "Watercolor painting"), "a watercolor painting of a cat");
+  assert.equal(leadWithMedium("a watch", "Photorealistic"), "a photorealistic image of a watch");
+  assert.equal(leadWithMedium("a robot", "3D render"), "a 3d render of a robot");
+  assert.equal(leadWithMedium("a fox", "Oil painting"), "an oil painting of a fox");
 });

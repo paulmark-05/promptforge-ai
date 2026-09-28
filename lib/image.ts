@@ -137,11 +137,19 @@ export function optimizeImageOffline(prompt: string, intent?: Intent | null) {
   const a = analyzeImagePrompt(prompt);
   const dim = Object.fromEntries(a.dimensions.map((d) => [d.key, d.score]));
   const need = hasIntent(intent) ? intent : null;
-  const parts: string[] = [prompt.trim().replace(/[.,\s]+$/, "")];
+  const subject = prompt.trim().replace(/[.,\s]+$/, "");
+  const parts: string[] = [subject];
+  let styled = false; // medium texture words already describe the finish
   const changes: { technique: string; description: string }[] = [];
   if (need?.goal.trim()) {
-    parts.push(need.goal.trim().toLowerCase());
-    changes.push({ technique: "Style and medium", description: `Added the style you chose: ${need.goal.trim()}.` });
+    // Image models follow the medium far better when it leads the prompt
+    // ("a watercolor painting of a cat") and comes with its typical textures.
+    const style = need.goal.trim();
+    parts[0] = leadWithMedium(subject, style);
+    const texture = textureFor(style);
+    if (texture) parts.push(texture);
+    styled = Boolean(texture);
+    changes.push({ technique: "Style and medium", description: `Put the style you chose first (${style})${texture ? ` and added its typical look: ${texture}` : ""}.` });
   }
   if (need?.format.trim()) {
     parts.push(need.format.trim().toLowerCase());
@@ -155,7 +163,7 @@ export function optimizeImageOffline(prompt: string, intent?: Intent | null) {
     parts.push(`suitable for ${/^[aeiou]/i.test(need.audience.trim()) ? "an" : "a"} ${need.audience.trim().toLowerCase()}`);
     changes.push({ technique: "Composition and camera", description: `Aimed the composition at its use: ${need.audience.trim()}.` });
   }
-  if (dim.detail === 0) {
+  if (dim.detail === 0 && !styled) {
     parts.push("sharp focus, high detail");
     changes.push({ technique: "Detail and quality", description: "Added neutral finish words: sharp focus, high detail." });
   }
@@ -172,6 +180,31 @@ export function optimizeImageOffline(prompt: string, intent?: Intent | null) {
       : "No needs were confirmed, so only neutral finish words were added. Choosing a style and mood makes the biggest difference.",
     mode: "offline" as const,
   };
+}
+
+const MEDIUM_NOUN = /\b(painting|render|illustration|sketch|drawing|photo|photograph|poster|art|artwork|print|collage|comic)\b/i;
+const TEXTURES: [RegExp, string][] = [
+  [/watercolou?r/i, "soft washes of color, visible paper texture, loose brushstrokes"],
+  [/oil paint/i, "rich thick brushstrokes, canvas texture"],
+  [/acrylic/i, "bold opaque brushstrokes"],
+  [/pencil|graphite|charcoal|sketch/i, "fine graphite lines, cross-hatching, paper texture"],
+  [/3d|render|clay/i, "smooth materials, soft global illumination"],
+  [/photo|realistic/i, "natural light, realistic detail, shallow depth of field"],
+  [/anime|manga|cartoon|comic/i, "clean line art, cel shading"],
+  [/flat|vector|minimal/i, "flat colors, clean simple shapes"],
+  [/pixel/i, "crisp pixel grid, limited palette"],
+];
+
+// "a cat" + "Watercolor painting" -> "a watercolor painting of a cat"
+export function leadWithMedium(subject: string, style: string) {
+  const st = style.trim().toLowerCase();
+  const noun = MEDIUM_NOUN.test(st) ? st : `${st} image`;
+  const article = /^[aeiou]/.test(noun) ? "an" : "a";
+  return `${article} ${noun} of ${subject}`;
+}
+
+function textureFor(style: string) {
+  return TEXTURES.find(([rx]) => rx.test(style))?.[1] ?? "";
 }
 
 function hit(rx: RegExp, text: string, yes: string, no: string) {

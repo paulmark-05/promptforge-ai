@@ -83,10 +83,10 @@ export const LESSONS: Record<string, Lesson> = {
   },
   style: {
     title: "Style and medium",
-    what: "Say what it should look like: photo, watercolor, 3D render, flat illustration.",
-    why: "Style changes the whole image more than any other word.",
-    before: "a mountain lake",
-    after: "a mountain lake, watercolor painting with soft washes",
+    what: "Say what it should look like, and put it first: \"a watercolor painting of ...\", \"a studio photo of ...\".",
+    why: "Style changes the whole image more than any other word, and image models follow it much better when it leads the prompt with a few texture words.",
+    before: "a mountain lake, watercolor",
+    after: "a watercolor painting of a mountain lake, soft washes of color, visible paper texture",
   },
   composition: {
     title: "Composition and camera",
