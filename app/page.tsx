@@ -1222,13 +1222,53 @@ export default function Home() {
         </div>
       )}
 
-      <footer>
-        <span>PromptForge AI · Generative AI Capstone Project 2026</span>
-        <span className="credit">
-          Made with care by <b>Nayani Paul</b> ·{" "}
-          <a href="https://nayani-paul-portfolio.vercel.app" target="_blank" rel="noopener noreferrer">Portfolio</a>
-        </span>
-        <span>{status?.model ? `Model: ${status.model}` : ""}{kind === "image" ? " · Images by Pollinations.ai" : ""}</span>
+      <footer className="site-footer">
+        <div className="sf-top">
+          <div className="sf-brand">
+            <div className="sf-logo"><Logo size={26} /><b>PromptForge</b></div>
+            <p>Say what you need. Get the answer you meant. Check, rewrite and fairly compare prompts for text and images.</p>
+            <span className="sf-status"><i className={status?.serverKey || userKey ? "on" : ""} />{status?.serverKey || userKey ? `Live AI · ${status?.model ?? "Groq"}` : "Offline mode"}</span>
+          </div>
+
+          <nav className="sf-col" aria-label="Workflow">
+            <h4>Workflow</h4>
+            <ul>
+              {STEPS.map((st, i) => (
+                <li key={st}>
+                  <button disabled={!reachable[i]} onClick={() => goView(i)}>
+                    <span className="sf-n">{String(i + 1).padStart(2, "0")}</span>{st}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <nav className="sf-col" aria-label="Project">
+            <h4>Project</h4>
+            <ul>
+              <li><a href="https://github.com/paulmark-05/promptforge-ai" target="_blank" rel="noopener noreferrer">Source on GitHub <span aria-hidden>↗</span></a></li>
+              <li><button onClick={() => openKeys("text")}>Free Groq key guide</button></li>
+              <li><button onClick={() => openKeys("image")}>Free image key guide</button></li>
+              <li><a href="https://pollinations.ai" target="_blank" rel="noopener noreferrer">Images by Pollinations <span aria-hidden>↗</span></a></li>
+            </ul>
+          </nav>
+
+          <a className="sf-author" href="https://nayani-paul-portfolio.vercel.app" target="_blank" rel="noopener noreferrer">
+            <span className="sf-avatar" aria-hidden>NP</span>
+            <span className="sf-author-text">
+              <small>Designed and built by</small>
+              <b>Nayani Paul</b>
+              <span>Generative AI Capstone 2026</span>
+            </span>
+            <span className="sf-visit">View portfolio <Icon.arrow /></span>
+          </a>
+        </div>
+
+        <div className="sf-bottom">
+          <span>© 2026 PromptForge AI</span>
+          <span className="sf-made">Made with care by <a href="https://nayani-paul-portfolio.vercel.app" target="_blank" rel="noopener noreferrer">Nayani Paul</a></span>
+          <span>Next.js · Groq · Pollinations</span>
+        </div>
       </footer>
       </div>
 
