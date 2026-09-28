@@ -10,9 +10,10 @@ import { Hero, type HeroDemo } from "../components/Hero";
 import { EMPTY_INTENT, INTENT_FIELDS, hasIntent, intentStatement, type Intent, type IntentOptions } from "../lib/intent";
 import { combineVerdicts, type PairwiseResult } from "../lib/judge";
 import { IMAGE_INTENT_FIELDS, analyzeImagePrompt, sizeFor, type ImageAnalysis } from "../lib/image";
-import { lessonFor, type Lesson } from "../lib/lessons";
+import { LESSONS, lessonFor, type Lesson } from "../lib/lessons";
 import { estimateTokens, imageSnippet, textSnippet, type SnippetLang } from "../lib/snippets";
 import { buildReportHtml, reportFileName, type ReportData } from "../lib/report";
+import { Dumbbell, PairBars, SERIES, type DumbbellRow } from "../components/charts";
 
 interface Critique { summary?: string; strengths?: string[]; weaknesses?: string[]; suggestions?: string[] }
 interface OptResult { optimizedPrompt: string; changes: Change[]; rationale: string; mode: "llm" | "offline"; before: number; after: number; warning?: string }
@@ -52,11 +53,12 @@ const CRITERIA_LABELS: Record<string, string> = {
   conciseness: "Conciseness",
   instruction_following: "Instruction following",
 };
-const AUDIENCES: { id: Audience; label: string; blurb: string }[] = [
-  { id: "beginner", label: "New to prompting", blurb: "Plain language, one button to improve" },
-  { id: "learner", label: "Learning", blurb: "A short lesson for every issue and change" },
-  { id: "developer", label: "Developer", blurb: "Code snippets, tokens and JSON export" },
+const AUDIENCES: { id: Audience; label: string; blurb: string; gives: string[] }[] = [
+  { id: "beginner", label: "New to prompting", blurb: "Plain words, no jargon", gives: ["A one-line verdict in plain words", "Only the top fixes, explained simply", "One button to get a better prompt"] },
+  { id: "learner", label: "Learning", blurb: "Lessons and a skills tracker", gives: ["A short lesson on every issue and change", "Before and after examples for each technique", "A tracker of the skills you have studied"] },
+  { id: "developer", label: "Developer", blurb: "Code, tokens and raw data", gives: ["Ready-to-run Node.js, Python and cURL", "Token estimates and latency numbers", "Raw analysis JSON and a JSON export"] },
 ];
+const SKILLS_STORE = "pf_skills";
 const STEPS = ["Check", "Needs", "Rewrite", "Compare", "Summary"];
 
 function load<T>(key: string, fallback: T): T {
@@ -94,6 +96,7 @@ export default function Home() {
   const [limitNotice, setLimitNotice] = useState<{ service: Service; own: boolean; message: string } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [audience, setAudience] = useState<Audience>("beginner");
+  const [skills, setSkills] = useState<string[]>([]);
   const [kind, setKind] = useState<Kind>("text");
 
   const [prompt, setPrompt] = useState("");
@@ -125,6 +128,7 @@ export default function Home() {
   const [seed, setSeed] = useState(0);
   const [images, setImages] = useState<{ a?: string; b?: string }>({});
   const [imgBusy, setImgBusy] = useState<"a" | "b" | null>(null);
+  const [imgTimes, setImgTimes] = useState<{ a?: number; b?: number }>({});
 
   // The deck: one card per step; the card flips when the step changes.
   const [view, setView] = useState(0);
@@ -157,6 +161,7 @@ export default function Home() {
   useEffect(() => {
     setUserKey(load(KEY_STORE, ""));
     setImageKey(load(IMAGE_KEY_STORE, ""));
+    setSkills(load<string[]>(SKILLS_STORE, []));
     try {
       const out = JSON.parse(sessionStorage.getItem(SITE_OUT_STORE) || "null");
       if (out) setSiteOut(out);
@@ -383,11 +388,15 @@ export default function Home() {
     setError(null);
     try {
       setImgBusy("a");
+      let t = performance.now();
       const a = await fetchImage(prompt, s);
+      const ta = performance.now() - t;
       setImages({ a });
       setImgBusy("b");
+      t = performance.now();
       const b = await fetchImage(optText, s);
       setImages({ a, b });
+      setImgTimes({ a: ta, b: performance.now() - t });
     } catch (e) {
       fail(e);
     } finally {
@@ -469,6 +478,16 @@ export default function Home() {
   function openKeys(tab: "text" | "image") {
     setKeysTab(tab);
     setShowSettings(true);
+  }
+
+  // Learner mode: remember which lessons have been opened.
+  function learned(title: string) {
+    setSkills((prev) => {
+      if (prev.includes(title)) return prev;
+      const next = [...prev, title];
+      save(SKILLS_STORE, next);
+      return next;
+    });
   }
 
   function chooseAudience(a: Audience) {
@@ -593,6 +612,8 @@ export default function Home() {
             </div>
           </div>
 
+          <ModeBrief audience={audience} skills={skills} onReset={() => { setSkills([]); save(SKILLS_STORE, []); }} />
+
           <ol className="stepper" ref={deckRef}>
             {STEPS.map((s, i) => (
               <li key={s} className={`${view === i ? "current" : ""} ${done[i] ? "done" : ""}`}>
@@ -670,6 +691,8 @@ export default function Home() {
                         </div>
                       </div>
 
+                      {beginner && <p className="plain-verdict">{plainVerdict(analysis, kind)}</p>}
+
                       {analysis.injectionRisk && (
                         <div className="notice bad">
                           <Icon.alert />
@@ -690,7 +713,7 @@ export default function Home() {
                                     {!beginner && <div className="tech">{i.technique}</div>}
                                     <div className="msg">{beginner ? i.suggestion : i.message}</div>
                                     {!beginner && <div className="fix">{i.suggestion}</div>}
-                                    {learner && lesson && <LessonBox lesson={lesson} />}
+                                    {learner && lesson && <LessonBox lesson={lesson} onOpen={learned} known={skills.includes(lesson.title)} />}
                                   </div>
                                 </li>
                               );
@@ -707,6 +730,8 @@ export default function Home() {
                           {!!critique.suggestions?.length && (<><div className="label">Suggestions</div><ul>{critique.suggestions.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
                         </div>
                       )}
+
+                      {developer && <JsonView label="Raw analysis JSON" data={analysis} />}
 
                       {canOptimize && (
                         <div className="actions end">
@@ -847,7 +872,7 @@ export default function Home() {
                                 <b>{c.technique}</b>
                                 <span>
                                   {c.description}
-                                  {learner && lesson && <LessonBox lesson={lesson} />}
+                                  {learner && lesson && <LessonBox lesson={lesson} onOpen={learned} known={skills.includes(lesson.title)} />}
                                 </span>
                               </li>
                             );
@@ -902,6 +927,17 @@ export default function Home() {
                             </figure>
                           ))}
                         </div>
+                      )}
+                      {images.b && analysis && optLive && (
+                        <>
+                          <div className="kpis" style={{ marginTop: 20 }}>
+                            <Kpi label="Prompt score" value={`${analysis.score} → ${optLive.score}`} note={`${optLive.score - analysis.score >= 0 ? "+" : ""}${optLive.score - analysis.score} points`} tone={optLive.score > analysis.score ? "good" : undefined} />
+                            <Kpi label="Elements described" value={`${covered(analysis)} → ${covered(optLive)} of ${analysis.dimensions.length}`} note="Scored 7 or more out of 10" />
+                            <Kpi label="Prompt length" value={`${analysis.wordCount} → ${optLive.wordCount} words`} note="More detail for the model" />
+                            <Kpi label="Render time" value={imgTimes.a && imgTimes.b ? `${(imgTimes.a / 1000).toFixed(1)}s · ${(imgTimes.b / 1000).toFixed(1)}s` : "–"} note="Original · optimized" />
+                          </div>
+                          <Dumbbell title="Image elements described" subtitle="How fully each prompt describes the image, 0 to 10 per element (rule-based)" rows={dimRows(analysis, optLive)} />
+                        </>
                       )}
                       {images.b && (
                         <div className="actions end">
@@ -986,6 +1022,16 @@ export default function Home() {
                     )}
                     <Kpi label="Needs stated" value={String(confirmedIntent ? fields.filter((f) => confirmedIntent[f.key]?.trim()).length : 0)} note={confirmedIntent ? "Used as the target" : "Left open"} />
                   </div>
+
+                  <Dumbbell
+                    title={kind === "image" ? "Image elements described" : "Prompt quality by dimension"}
+                    subtitle="Rule-based score per dimension, 0 to 10, before and after the rewrite"
+                    rows={dimRows(analysis, optLive ?? analysis)}
+                    legendA="Before"
+                    legendB="After"
+                  />
+                  <IssuesResolved before={analysis} after={optLive} />
+                  {runs && <RunsAnalytics runs={runs} />}
 
                   <div className="split" style={{ marginTop: 20 }}>
                     <div className="pane">
@@ -1219,10 +1265,10 @@ function TechniqueChips({ techniques, toggle, learner }: { techniques: Technique
   );
 }
 
-function LessonBox({ lesson }: { lesson: Lesson }) {
+function LessonBox({ lesson, onOpen, known }: { lesson: Lesson; onOpen?: (title: string) => void; known?: boolean }) {
   return (
-    <details className="lesson-box">
-      <summary>Learn: {lesson.title}</summary>
+    <details className={`lesson-box ${known ? "known" : ""}`} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) onOpen?.(lesson.title); }}>
+      <summary>{known ? "Studied" : "Learn"}: {lesson.title}</summary>
       <div>
         <p>{lesson.what}</p>
         <p className="why">Why it works: {lesson.why}</p>
@@ -1235,25 +1281,112 @@ function LessonBox({ lesson }: { lesson: Lesson }) {
   );
 }
 
+const LANGS: { id: SnippetLang; label: string; file: string; setup: (image: boolean) => string[] }[] = [
+  { id: "javascript", label: "Node.js", file: "index.mjs", setup: () => ["Node 18 or newer (built-in fetch)", "Save as index.mjs", "Run: node index.mjs"] },
+  { id: "python", label: "Python", file: "main.py", setup: (image) => (image ? ["Python 3.8 or newer, no packages", "Save as main.py", "Run: python main.py"] : ["pip install openai", "Save as main.py", "Run: python main.py"]) },
+  { id: "curl", label: "cURL", file: "terminal", setup: () => ["macOS, Linux or Git Bash", "Paste into a terminal", "The key is read from the environment"] },
+];
+
+// Developer mode: the optimized prompt as code you can drop into your own app.
 function CodePanel({ kind, prompt, shape, seed, model }: { kind: Kind; prompt: string; shape?: string; seed: number; model?: string }) {
   const [lang, setLang] = useState<SnippetLang>("javascript");
-  const [done, setDone] = useState(false);
-  const code = kind === "image" ? imageSnippet(lang, prompt, shape, seed) : textSnippet(lang, prompt, model || undefined);
+  const [copied, setCopied] = useState<"" | "code" | "json">("");
+  const image = kind === "image";
+  const code = image ? imageSnippet(lang, prompt, shape, seed) : textSnippet(lang, prompt, model || undefined);
+  const meta = LANGS.find((l) => l.id === lang)!;
+  const envVar = image ? "POLLINATIONS_API_KEY" : "LLM_API_KEY";
+  const copy = (text: string, what: "code" | "json") =>
+    navigator.clipboard.writeText(text).then(() => { setCopied(what); setTimeout(() => setCopied(""), 1500); }).catch(() => {});
   return (
     <div className="code-panel">
+      <div className="code-intro">
+        <div>
+          <b>Use this prompt in your own app</b>
+          <span>{image ? "Generates the same image from your code with a free Pollinations key." : "Sends the optimized prompt to any OpenAI-compatible API (Groq shown, free tier)."}</span>
+        </div>
+        <dl className="code-facts">
+          <div><dt>Endpoint</dt><dd>{image ? "gen.pollinations.ai/image" : "api.groq.com/openai/v1"}</dd></div>
+          <div><dt>Model</dt><dd>{image ? "flux" : model || "openai/gpt-oss-120b"}</dd></div>
+          <div><dt>Prompt</dt><dd>~{estimateTokens(prompt)} tokens</dd></div>
+        </dl>
+      </div>
       <div className="code-head">
-        <div className="tabs" role="tablist">
-          {(["javascript", "python", "curl"] as const).map((l) => (
-            <button key={l} role="tab" aria-selected={lang === l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>{l === "javascript" ? "JavaScript" : l === "python" ? "Python" : "curl"}</button>
+        <div className="tabs" role="tablist" aria-label="Language">
+          {LANGS.map((l) => (
+            <button key={l.id} role="tab" aria-selected={lang === l.id} className={lang === l.id ? "on" : ""} onClick={() => setLang(l.id)}>{l.label}</button>
           ))}
         </div>
-        <span className="code-meta">~{estimateTokens(prompt)} prompt tokens{kind === "image" ? " · needs a free Pollinations key" : ""}</span>
-        <button className="btn sm" onClick={() => { navigator.clipboard.writeText(code).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {}); }}>
-          {done ? <Icon.check /> : <Icon.copy />} {done ? "Copied" : "Copy code"}
+        <span className="code-meta">{meta.file}</span>
+        <button className="btn sm" onClick={() => copy(JSON.stringify(prompt), "json")} title="The prompt as an escaped JSON string, ready for a config file">
+          {copied === "json" ? <Icon.check /> : <Icon.copy />} {copied === "json" ? "Copied" : "Prompt as JSON"}
+        </button>
+        <button className="btn sm primary" onClick={() => copy(code, "code")}>
+          {copied === "code" ? <Icon.check /> : <Icon.copy />} {copied === "code" ? "Copied" : "Copy code"}
         </button>
       </div>
+      <ol className="code-steps">
+        <li><span>1</span>Set your key: <code>{lang === "python" || lang === "curl" ? `export ${envVar}=...` : `${envVar}=... node index.mjs`}</code></li>
+        {meta.setup(image).map((t, i) => <li key={t}><span>{i + 2}</span>{t}</li>)}
+      </ol>
       <pre className="code">{code}</pre>
     </div>
+  );
+}
+
+// Mode strip: what the chosen mode gives you, plus the learner's skills tracker.
+function ModeBrief({ audience, skills, onReset }: { audience: Audience; skills: string[]; onReset: () => void }) {
+  const mode = AUDIENCES.find((a) => a.id === audience)!;
+  const all = Object.values(LESSONS).map((l) => l.title);
+  const known = all.filter((t) => skills.includes(t));
+  return (
+    <div key={audience} className={`mode-brief ${audience}`}>
+      <div className="mb-gives">
+        <span className="mb-label">{mode.label} mode gives you</span>
+        <ul>{mode.gives.map((g) => <li key={g}><Icon.check size={12} />{g}</li>)}</ul>
+      </div>
+      {audience === "learner" && (
+        <div className="mb-skills">
+          <div className="mb-skills-head">
+            <span className="mb-label">Skills studied</span>
+            <b>{known.length} / {all.length}</b>
+            {known.length > 0 && <button className="link-btn" onClick={onReset}>Reset</button>}
+          </div>
+          <div className="mb-meter" aria-hidden><span style={{ width: `${(known.length / all.length) * 100}%` }} /></div>
+          <div className="mb-chips">
+            {all.map((t) => <span key={t} className={skills.includes(t) ? "on" : ""}>{skills.includes(t) ? "✓ " : ""}{t}</span>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Beginner mode: the score in one plain sentence, without technique names.
+const PLAIN: Record<string, string> = {
+  clarity: "saying exactly what you want",
+  specificity: "the details",
+  context: "the background",
+  "role / persona": "who the AI should act as",
+  "output format": "how the answer should look",
+  constraints: "limits such as length or tone",
+  examples: "an example",
+  structure: "how the request is organised",
+};
+function plainVerdict(a: PromptAnalysis, kind: Kind) {
+  const weakest = [...a.dimensions].sort((x, y) => x.score - y.score).slice(0, 2).map((d) => PLAIN[d.label.toLowerCase()] ?? d.label.toLowerCase());
+  const what = kind === "image" ? "the picture" : "what you want";
+  if (a.score >= 80) return `In short: this is a clear prompt. The AI should understand ${what} without guessing.`;
+  if (a.score >= 55) return `In short: a decent start. Saying more about ${weakest.join(" and ")} will get you a closer answer.`;
+  return `In short: the AI would have to guess a lot here. The biggest gaps are ${weakest.join(" and ")}. Press Next and we will fill them in with you.`;
+}
+
+function JsonView({ label, data }: { label: string; data: unknown }) {
+  const text = JSON.stringify(data, null, 2);
+  return (
+    <details className="json-view">
+      <summary>{label} <span>{(text.length / 1024).toFixed(1)} KB</span></summary>
+      <pre className="code">{text}</pre>
+    </details>
   );
 }
 
@@ -1311,18 +1444,89 @@ function Comparison({ runs }: { runs: Runs }) {
           {runs.reason && <span className="why">{runs.reason}</span>}
         </div>
       </div>
-      {saving != null && speed != null && (
-        <div className="efficiency">
-          <Metric label="Output tokens" a={ta!} b={tb!} better={tb! <= ta!} note={`${Math.abs(Math.round(saving * 100))}% ${saving >= 0 ? "fewer" : "more"}`} />
-          <Metric label="Latency" a={`${(runs.original.latencyMs / 1000).toFixed(1)}s`} b={`${(runs.optimized.latencyMs / 1000).toFixed(1)}s`} better={speed >= 1} note={speed >= 1 ? `${speed.toFixed(1)}x faster` : `${(1 / speed).toFixed(1)}x slower`} />
-          <Metric label="Words" a={runs.original.evaluation.metrics.wordCount} b={runs.optimized.evaluation.metrics.wordCount} better={runs.optimized.evaluation.metrics.wordCount <= runs.original.evaluation.metrics.wordCount} />
-        </div>
-      )}
-      <div className="eval-grid">
-        <EvalCard title="Original prompt" run={runs.original} result={runs.original.evaluation} winner={winner === "original"} rulesLabel={runs.intentUsed ? "Your stated needs" : "Your original request"} />
-        <EvalCard title="Optimized prompt" run={runs.optimized} result={runs.optimized.evaluation} winner={winner === "optimized"} rulesLabel={runs.intentUsed ? "Your stated needs" : "Your original request"} />
+      <RunsAnalytics runs={runs} />
+      <div className="eval-grid" style={{ marginTop: 20 }}>
+        <EvalCard title="Original prompt" run={runs.original} result={runs.original.evaluation} winner={winner === "original"} compact />
+        <EvalCard title="Optimized prompt" run={runs.optimized} result={runs.optimized.evaluation} winner={winner === "optimized"} compact />
       </div>
     </>
+  );
+}
+
+function covered(a: PromptAnalysis) {
+  return a.dimensions.filter((d) => d.score >= 7).length;
+}
+
+function dimRows(a: PromptAnalysis, b: PromptAnalysis): DumbbellRow[] {
+  return a.dimensions.map((d) => ({ label: d.label, a: d.score, b: b.dimensions.find((x) => x.key === d.key)?.score ?? 0, note: `Weight ${d.weight}% of the prompt score` }));
+}
+
+// Answer analytics: scoring criteria, efficiency and the rule checks, side by side.
+function RunsAnalytics({ runs }: { runs: Runs }) {
+  const o = runs.original, n = runs.optimized;
+  const rows: DumbbellRow[] = Object.keys(CRITERIA_LABELS).map((k) => ({
+    label: CRITERIA_LABELS[k],
+    a: o.evaluation.judge?.scores[k] ?? 0,
+    b: n.evaluation.judge?.scores[k] ?? 0,
+  }));
+  const eff = [
+    ...(o.tokens && n.tokens ? [{ label: "Output tokens", a: o.tokens.completion, b: n.tokens.completion, unit: "tok", lowerIsBetter: true }] : []),
+    { label: "Latency", a: o.latencyMs / 1000, b: n.latencyMs / 1000, unit: "s", lowerIsBetter: true, format: (v: number) => v.toFixed(1) },
+    { label: "Answer length", a: o.evaluation.metrics.wordCount, b: n.evaluation.metrics.wordCount, unit: "words", lowerIsBetter: true },
+  ];
+  const checks = o.evaluation.metrics.checks.map((c, i) => ({ label: c.label, a: c, b: n.evaluation.metrics.checks[i] }));
+  return (
+    <>
+      <Dumbbell title="Scoring criteria" subtitle={`Judge scores out of 10, averaged over both answer orders, against ${runs.intentUsed ? "your stated needs" : "your original request"}`} rows={rows} />
+      <PairBars title="Efficiency" items={eff} />
+      <figure className="chart">
+        <figcaption className="chart-head">
+          <div><b>Rule checks</b><span>The same rules applied to both answers</span></div>
+        </figcaption>
+        <table className="chart-table checks-table">
+          <thead><tr><th>Check</th><th><i className="sw" style={{ background: SERIES.a.color }} />Original</th><th><i className="sw" style={{ background: SERIES.b.color }} />Optimized</th></tr></thead>
+          <tbody>
+            {checks.map((c) => (
+              <tr key={c.label}>
+                <td>{c.label}</td>
+                <td><CheckCell c={c.a} /></td>
+                <td>{c.b ? <CheckCell c={c.b} /> : "–"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </figure>
+    </>
+  );
+}
+
+function CheckCell({ c }: { c: { passed: boolean; detail: string } }) {
+  return (
+    <span className={`check-cell ${c.passed ? "ok" : "no"}`}>
+      <b>{c.passed ? "✓ Pass" : "✗ Fail"}</b>
+      <span>{c.detail}</span>
+    </span>
+  );
+}
+
+function IssuesResolved({ before, after }: { before: PromptAnalysis; after: PromptAnalysis | null }) {
+  if (!after) return null;
+  const left = new Set(after.issues.map((i) => i.id));
+  const resolved = before.issues.filter((i) => !left.has(i.id));
+  const remaining = after.issues;
+  return (
+    <figure className="chart">
+      <figcaption className="chart-head">
+        <div><b>Issues resolved</b><span>{before.issues.length} found before, {remaining.length} left after the rewrite</span></div>
+        <div className="issue-meter" aria-label={`${resolved.length} of ${before.issues.length} resolved`}>
+          <span style={{ width: `${before.issues.length ? (resolved.length / before.issues.length) * 100 : 100}%` }} />
+        </div>
+      </figcaption>
+      <ul className="resolved">
+        {resolved.map((i) => <li key={i.id} className="ok"><b>✓</b><span>{i.technique}</span><em>{i.message}</em></li>)}
+        {remaining.map((i) => <li key={i.id} className="left"><b>•</b><span>{i.technique}</span><em>{i.message}</em></li>)}
+      </ul>
+    </figure>
   );
 }
 
@@ -1336,7 +1540,7 @@ function Metric({ label, a, b, better, note }: { label: string; a: number | stri
   );
 }
 
-function EvalCard({ title, run, result, winner, rulesLabel = "Rules in the prompt" }: { title: string; run?: RunResult; result: EvalResult; winner?: boolean; rulesLabel?: string }) {
+function EvalCard({ title, run, result, winner, rulesLabel = "Rules in the prompt", compact }: { title: string; run?: RunResult; result: EvalResult; winner?: boolean; rulesLabel?: string; compact?: boolean }) {
   const { metrics, judge } = result;
   return (
     <div className="eval-card">
@@ -1344,21 +1548,21 @@ function EvalCard({ title, run, result, winner, rulesLabel = "Rules in the promp
         <h4>{title} {winner && <span className="tag good">Preferred</span>}</h4>
         {judge && <span className="big" style={{ color: scoreColor(judge.overall) }}><CountUp value={judge.overall} /></span>}
       </div>
-      {judge && (
+      {judge && !compact && (
         <div className="bars">
           {Object.entries(judge.scores).map(([k, v], i) => <Bar key={k} index={i} label={CRITERIA_LABELS[k] ?? k} value={v} />)}
         </div>
       )}
       {judge?.feedback && <p className="feedback">{judge.feedback}</p>}
-      <div className="checks-label">{rulesLabel}</div>
-      <ul className="checks">
+      {!compact && <div className="checks-label">{rulesLabel}</div>}
+      {!compact && <ul className="checks">
         {metrics.checks.map((c) => (
           <li key={c.label}>
             <span><span className={c.passed ? "ok" : "no"}>{c.passed ? "Pass" : "Fail"}</span> · {c.label}</span>
             <span className="detail">{c.detail}</span>
           </li>
         ))}
-      </ul>
+      </ul>}
       <div className="stats">
         <span><b>{metrics.wordCount}</b> words</span>
         <span>Readability <b>{metrics.readability}</b></span>
