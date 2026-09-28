@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sizeFor } from "../../../lib/image";
+import { DEFAULT_IMAGE_MODEL, sizeFor } from "../../../lib/image";
 import { bad, handle, readText } from "../../../lib/api";
 
 export const maxDuration = 60;
@@ -17,7 +17,7 @@ export const POST = handle(async (req) => {
 
   const q = new URLSearchParams({ width: String(width), height: String(height), seed: String(seed) });
   const url = key
-    ? `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?${q}&model=zimage`
+    ? `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?${q}&model=${encodeURIComponent(process.env.POLLINATIONS_MODEL || DEFAULT_IMAGE_MODEL)}`
     : `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?${q}`;
 
   let res: Response;
@@ -30,14 +30,14 @@ export const POST = handle(async (req) => {
   if (res.status === 402 || res.status === 429) {
     return bad(
       key
-        ? "Your Pollinations key has used its free allowance for now. Try again later."
-        : "The free no-key image allowance is used up for now. Add a free Pollinations key in Settings (enter.pollinations.ai) to keep generating.",
+        ? "Your Pollinations key has run out of Pollen (its budget is used up). Raise the key's budget or claim more free Pollen from Quests at enter.pollinations.ai."
+        : "The free no-key image allowance is used up for now. Add a free Pollinations key under Keys (see the guide) to keep generating.",
       402,
     );
   }
   const type = res.headers.get("content-type") || "";
   if (!res.ok || !type.startsWith("image/")) return bad(`The image service returned an error (${res.status}).`, 502);
   return new NextResponse(await res.arrayBuffer(), {
-    headers: { "Content-Type": type, "Cache-Control": "private, max-age=3600", "X-Image-Source": key ? "keyed" : "free" },
+    headers: { "Content-Type": type, "Cache-Control": "private, max-age=3600", "X-Image-Source": key ? "keyed" : "free", "X-Image-Model": key ? process.env.POLLINATIONS_MODEL || DEFAULT_IMAGE_MODEL : "legacy" },
   });
 });

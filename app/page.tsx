@@ -75,6 +75,7 @@ export default function Home() {
   const [userKey, setUserKey] = useState("");
   const [imageKey, setImageKey] = useState("");
   const [showSettings, setShowSettings] = useState(false);
+  const [keysTab, setKeysTab] = useState<"text" | "image">("text");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [audience, setAudience] = useState<Audience>("beginner");
   const [kind, setKind] = useState<Kind>("text");
@@ -209,10 +210,10 @@ export default function Home() {
     return data as T;
   }
 
-  function goView(v: number) {
+  function goView(v: number, scroll = true) {
     setDir(v >= view ? 1 : -1);
     setView(v);
-    requestAnimationFrame(() => deckRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    if (scroll) requestAnimationFrame(() => deckRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
   function resetDownstream() {
@@ -368,7 +369,7 @@ export default function Home() {
     setIntentDone(null);
     setIntentOptions(null);
     resetDownstream();
-    goView(0);
+    goView(0, false);
   }
 
   function loadPrompt(p: string, k: Kind = kind) {
@@ -410,6 +411,11 @@ export default function Home() {
     if (mode === "skipped") setIntent(EMPTY_INTENT);
     setIntentDone(mode);
     goView(2);
+  }
+
+  function openKeys(tab: "text" | "image") {
+    setKeysTab(tab);
+    setShowSettings(true);
   }
 
   function chooseAudience(a: Audience) {
@@ -499,7 +505,7 @@ export default function Home() {
             </span>
           )}
           <button className="btn sm" onClick={() => setShowSettings(true)}>
-            <Icon.key /> API key
+            <Icon.key /> Keys
           </button>
         </div>
       </header>
@@ -823,7 +829,7 @@ export default function Home() {
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                         <p style={{ color: "var(--text-2)", fontSize: 14, maxWidth: 540 }}>
                           Both prompts are rendered with the same seed and shape ({sizeFor(shape).label}), so the difference comes from the prompt. Prompts are sent to Pollinations.ai.
-                          {!imageKey && !status?.imageKey && <> Without a key you get a few free, watermarked images; <button className="linklike" onClick={() => setShowSettings(true)}>add a free key</button> for more.</>}
+                          {!imageKey && !status?.imageKey && <> Without a key you get a few free, watermarked images; <button className="linklike" onClick={() => openKeys("image")}>add a free key</button> for more.</>}
                         </p>
                         <button className="btn primary" disabled={imgBusy !== null} onClick={renderImages}>
                           {imgBusy ? <Spinner /> : <Icon.play />} {imgBusy ? `Rendering ${imgBusy === "a" ? "1" : "2"} of 2` : seed ? "New variation" : "Generate both images"}
@@ -863,7 +869,7 @@ export default function Home() {
                     <div className="notice info" style={{ marginTop: 0 }}>
                       <Icon.key />
                       <span>
-                        Generating answers needs an LLM API key. Add a free Groq key with the <b>API key</b> button, or
+                        Generating answers needs an LLM API key. <button className="linklike" onClick={() => openKeys("text")}>Add a free Groq key</button> (2 minutes, guide included), or
                         paste an answer you already have below to get the rule-based checks. You can still see the summary.
                       </span>
                     </div>
@@ -1006,6 +1012,24 @@ export default function Home() {
         </main>
 
         <aside className="side">
+          <div className="panel keys-panel">
+            <div className="panel-head"><h3>Your keys</h3></div>
+            <ul className="key-status">
+              <li>
+                <span className={`kdot ${status?.serverKey || userKey ? "on" : ""}`} />
+                <span>Text AI</span>
+                <b>{status?.serverKey ? "Site key active" : userKey ? "Your key" : "Offline only"}</b>
+              </li>
+              <li>
+                <span className={`kdot ${status?.imageKey || imageKey ? "on" : "warn"}`} />
+                <span>Images</span>
+                <b>{status?.imageKey ? "Site key active" : imageKey ? "Your key" : "Limited without key"}</b>
+              </li>
+            </ul>
+            <button className="btn sm keys-cta" onClick={() => openKeys(status?.serverKey || userKey ? "image" : "text")}>
+              <Icon.key /> Add your own keys
+            </button>
+          </div>
           <div className="panel">
             <div className="panel-head"><h3>{kind === "image" ? "Image samples" : "Samples"}</h3></div>
             <ul className="list">
@@ -1055,28 +1079,54 @@ export default function Home() {
 
       {showSettings && (
         <div className="modal-back" onClick={() => setShowSettings(false)}>
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={(e) => e.stopPropagation()}
+          <div className="modal keys-modal" role="dialog" aria-modal="true" aria-labelledby="keys-title" onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => { if (e.key === "Escape") setShowSettings(false); }}>
-            <h2 id="settings-title">API keys</h2>
-            <p>
-              {status?.serverKey
-                ? `This deployment already has a key configured (model: ${status.model}). Add your own only if the shared one hits its rate limit.`
-                : "No server key is configured. A free Groq key enables AI critique, AI rewriting, answer generation and LLM-judge scoring."}
-              {" "}Image generation needs no key.
-            </p>
-            <label htmlFor="key">Your Groq API key</label>
-            <input id="key" autoFocus className="field" type="password" placeholder="gsk_..." value={userKey} onChange={(e) => setUserKey(e.target.value)} />
-            <p style={{ fontSize: 13, color: "var(--muted)" }}>
-              Stored only in this browser. Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com/keys</a>.
-            </p>
-            <label htmlFor="image-key">Your Pollinations key (images, optional)</label>
-            <input id="image-key" className="field" type="password" placeholder="sk_..." value={imageKey} onChange={(e) => setImageKey(e.target.value)} />
-            <p style={{ fontSize: 13, color: "var(--muted)" }}>
-              {status?.imageKey ? "This deployment already has an image key. " : "Without a key you get a few free, watermarked images. "}
-              Use a Personal Secret Key (sk_) from <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noreferrer">enter.pollinations.ai</a>, with a small Pollen budget. Free Pollen comes from Quests.
-            </p>
+            <h2 id="keys-title">Add your own keys</h2>
+            <p>Both are free to start. Keys you paste here stay in this browser and are only sent to PromptForge&apos;s own server to make the request.</p>
+            <div className="kind keys-tabs" role="tablist">
+              <button role="tab" aria-selected={keysTab === "text"} className={keysTab === "text" ? "on" : ""} onClick={() => setKeysTab("text")}>Text AI (Groq)</button>
+              <button role="tab" aria-selected={keysTab === "image"} className={keysTab === "image" ? "on" : ""} onClick={() => setKeysTab("image")}>Images (Pollinations)</button>
+            </div>
+
+            {keysTab === "text" ? (
+              <div className="keys-guide">
+                <p className="keys-what">Unlocks the AI critique, AI rewrites, answer generation and the judge. {status?.serverKey ? <b>This site already has a key, so you only need your own if the shared one hits its limit.</b> : null}</p>
+                <ol className="guide-steps">
+                  <li><span><b>Open the Groq console</b> and sign in with Google, GitHub or email.</span><a className="btn sm primary" href="https://console.groq.com/keys" target="_blank" rel="noreferrer">Get a Groq key <Icon.arrow /></a></li>
+                  <li><span><b>Click &ldquo;Create API Key&rdquo;</b>, give it a name like &ldquo;PromptForge&rdquo;.</span></li>
+                  <li><span><b>Copy the key</b> (it starts with <code>gsk_</code>). Groq shows it only once.</span></li>
+                  <li><span><b>Paste it below</b> and press Save.</span></li>
+                </ol>
+                <label htmlFor="key">Your Groq key</label>
+                <input id="key" autoFocus className="field" type="password" placeholder="gsk_..." value={userKey} onChange={(e) => setUserKey(e.target.value)} />
+                <p className="keys-note">Free tier: about 8,000 tokens per minute and 200,000 per day on the default model, roughly one comparison a minute. No card needed.</p>
+              </div>
+            ) : (
+              <div className="keys-guide">
+                <p className="keys-what">Renders image prompts. Without a key only a couple of watermarked images work. {status?.imageKey ? <b>This site already has an image key.</b> : null}</p>
+                <ol className="guide-steps">
+                  <li><span><b>Sign in at Pollinations.</b></span><a className="btn sm primary" href="https://enter.pollinations.ai" target="_blank" rel="noreferrer">Open Pollinations <Icon.arrow /></a></li>
+                  <li><span><b>Get free Pollen:</b> open <b>Quests</b>, complete the ones you are eligible for and claim the rewards. No card needed.</span></li>
+                  <li><span><b>Create a Personal Secret Key</b> (starts with <code>sk_</code>), not an App Key. Give it a small <b>Pollen budget</b> so it can never overspend.</span><a className="btn sm" href="https://enter.pollinations.ai/keys" target="_blank" rel="noreferrer">Create a key <Icon.arrow /></a></li>
+                  <li><span><b>Paste it below</b> and press Save.</span></li>
+                </ol>
+                <label htmlFor="image-key">Your Pollinations key</label>
+                <input id="image-key" autoFocus className="field" type="password" placeholder="sk_..." value={imageKey} onChange={(e) => setImageKey(e.target.value)} />
+                <p className="keys-note">Cost: about 0.002 Pollen per image with the default FLUX Schnell model, so a budget of 1 Pollen covers roughly 500 images.</p>
+              </div>
+            )}
+
+            <details className="disclose keys-owner">
+              <summary><Icon.chevron /> Running your own copy? Set keys for every visitor</summary>
+              <div>
+                <p>On Vercel open your project, then <b>Settings → Environment Variables</b>, add the keys below and redeploy. Never put keys in code or commit them to GitHub.</p>
+                <pre className="code">{`LLM_API_KEY=gsk_...          # Groq, text AI
+POLLINATIONS_API_KEY=sk_...  # Pollinations, images`}</pre>
+              </div>
+            </details>
+
             <div className="modal-actions">
-              <button className="btn ghost" onClick={() => { setUserKey(""); setImageKey(""); save(KEY_STORE, ""); save(IMAGE_KEY_STORE, ""); }}>Remove keys</button>
+              <button className="btn ghost" onClick={() => { setUserKey(""); setImageKey(""); save(KEY_STORE, ""); save(IMAGE_KEY_STORE, ""); }}>Remove my keys</button>
               <button className="btn primary" onClick={() => { save(KEY_STORE, userKey.trim()); save(IMAGE_KEY_STORE, imageKey.trim()); setShowSettings(false); }}>Save</button>
             </div>
           </div>

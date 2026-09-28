@@ -1,6 +1,6 @@
 // Ready-to-paste code for developers: call a model (or the free image API) with the optimized prompt.
 
-import { sizeFor } from "./image.ts";
+import { DEFAULT_IMAGE_MODEL, sizeFor } from "./image.ts";
 
 export type SnippetLang = "curl" | "javascript" | "python";
 
@@ -39,7 +39,7 @@ print(res.choices[0].message.content)`;
 
 export function imageSnippet(lang: SnippetLang, prompt: string, shape: string | undefined, seed: number) {
   const { width, height } = sizeFor(shape);
-  const path = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=zimage`;
+  const path = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=${DEFAULT_IMAGE_MODEL}`;
   if (lang === "curl") return `# Free key: https://enter.pollinations.ai/keys
 curl -L -o image.jpg \\
   -H "Authorization: Bearer $POLLINATIONS_API_KEY" \\
@@ -47,7 +47,7 @@ curl -L -o image.jpg \\
   if (lang === "javascript") {
     return `// Free key: https://enter.pollinations.ai/keys
 const prompt = ${JSON.stringify(prompt)};
-const url = \`https://gen.pollinations.ai/image/\${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=zimage\`;
+const url = \`https://gen.pollinations.ai/image/\${encodeURIComponent(prompt)}?width=${width}&height=${height}&seed=${seed}&model=${DEFAULT_IMAGE_MODEL}\`;
 const res = await fetch(url, { headers: { Authorization: \`Bearer \${process.env.POLLINATIONS_API_KEY}\` } });
 const bytes = Buffer.from(await res.arrayBuffer());
 require("fs").writeFileSync("image.jpg", bytes);`;
@@ -56,7 +56,7 @@ require("fs").writeFileSync("image.jpg", bytes);`;
 import os, urllib.parse, urllib.request
 
 prompt = ${JSON.stringify(prompt)}
-url = f"https://gen.pollinations.ai/image/{urllib.parse.quote(prompt)}?width=${width}&height=${height}&seed=${seed}&model=zimage"
+url = f"https://gen.pollinations.ai/image/{urllib.parse.quote(prompt)}?width=${width}&height=${height}&seed=${seed}&model=${DEFAULT_IMAGE_MODEL}"
 req = urllib.request.Request(url, headers={"Authorization": f"Bearer {os.environ['POLLINATIONS_API_KEY']}"})
 with urllib.request.urlopen(req) as r, open("image.jpg", "wb") as f:
     f.write(r.read())`;

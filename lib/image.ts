@@ -111,6 +111,10 @@ export const IMAGE_PRESETS: IntentOptions = {
   tone: ["Warm golden hour", "Soft studio light", "Moody and dramatic"],
 };
 
+// Default Pollinations image model: FLUX.1 Schnell is cheap (0.002 Pollen per
+// image) and follows style words well. Override with POLLINATIONS_MODEL.
+export const DEFAULT_IMAGE_MODEL = "flux";
+
 // Rendering size for a chosen shape (defaults to square).
 export function sizeFor(shape: string | undefined): { width: number; height: number; label: string } {
   const m = shape?.match(/(\d+)\s*:\s*(\d+)/);
