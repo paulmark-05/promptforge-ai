@@ -555,3 +555,61 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
   .card3 { width: calc(100% - 40px); min-width: 0; left: calc(var(--i) * 20px); }
   .nbeam { display: none; }
 }
+
+/* ---------- Hero stack: interactions ---------- */
+.tilt {
+  transform-style: preserve-3d;
+  transform: rotateY(var(--ry, 0deg)) rotateX(var(--rx, 0deg));
+  transition: transform 0.35s var(--ease);
+}
+.stage.hovering .stack { animation-play-state: paused; }
+.card3 { cursor: pointer; }
+.card3:not(.active):hover { opacity: 0.92; }
+.card3-head { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
+.card3-head:focus-visible { outline-offset: 4px; }
+
+button.c-pill { font: 500 12px var(--sans); cursor: pointer; background: transparent; transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s var(--ease); }
+button.c-pill.guess:hover { border-style: solid; border-color: var(--accent-line); background: rgba(255, 107, 44, 0.1); color: var(--text); animation-play-state: paused; }
+button.c-pill.guess:active { transform: scale(0.95); }
+.c-pill .plus { color: var(--accent); font-weight: 700; }
+button.c-pill.guess.done { animation: none; border: 1px solid transparent; background: rgba(255, 255, 255, 0.04); color: var(--muted); text-decoration: line-through; cursor: default; }
+
+.needs-row { min-height: 60px; align-content: flex-start; }
+.c-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
+.c-pill.need { opacity: 1; animation: pop 0.5s var(--ease) both; }
+
+/* Card 3 only glows once the needs are known */
+.lines.short i { background: rgba(255, 255, 255, 0.13); box-shadow: none; transition: background 0.5s, box-shadow 0.5s; }
+.card3.ready .lines.short i { background: linear-gradient(90deg, #ff7a36, #ffc195); box-shadow: 0 0 10px rgba(255, 120, 50, 0.6); }
+.card3.active .lines.long i, .card3.active .lines.short i { animation: none; }
+.card3.active.ready .lines.long i { animation: dim 1.4s var(--ease) both; animation-delay: calc(var(--k) * 60ms); }
+.card3.active.ready .lines.short i { animation: grow-line 0.7s var(--ease) both; animation-delay: calc(350ms + var(--k) * 140ms); }
+.card3:not(.ready) .tick-dot { background: var(--surface-3); color: var(--muted); box-shadow: none; }
+
+/* A spark travels from the question on card 1 to the need on card 2 */
+.spark { position: absolute; left: 64px; top: 22%; width: 10px; height: 10px; border-radius: 50%; background: #ffe6d4; box-shadow: 0 0 10px 3px rgba(255, 140, 70, 0.95), 0 0 30px 8px rgba(255, 107, 44, 0.6); opacity: 0; pointer-events: none; transform: translateZ(90px); }
+.spark.go { animation: spark-fly 0.9s var(--ease) both; }
+@keyframes spark-fly {
+  0% { opacity: 0; transform: translate3d(0, 0, 90px) scale(0.5); }
+  15% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate3d(46px, 150px, 90px) scale(1.2); }
+}
+
+.stage-foot { position: absolute; left: 50%; bottom: clamp(4px, 2vh, 20px); transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: var(--s3); white-space: nowrap; }
+.dots { display: flex; align-items: center; gap: 2px; }
+.sdot { width: 22px; height: 22px; padding: 7px; border: 0; background: var(--border-strong); background-clip: content-box; border-radius: 999px; cursor: pointer; transition: width 0.3s var(--ease), background-color 0.3s; }
+.sdot.on { width: 36px; background-color: var(--accent); box-shadow: inset 0 0 0 7px var(--bg); }
+.stage-hint { font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.04em; }
+.replay { border: 0; background: none; padding: 4px; color: var(--accent); font: 600 12px var(--sans); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tilt { transform: none !important; }
+  .spark { display: none; }
+}
+
+/* Keep the 3D stack inside its column: anchor it left, and keep the copy above it */
+.stage { justify-items: start; padding-left: clamp(0px, 3vw, 48px); }
+.stack { width: min(360px, 100%); }
+.hero3-copy { position: relative; z-index: 2; }
+@media (max-width: 960px) { .stage { justify-items: center; padding-left: 0; } }

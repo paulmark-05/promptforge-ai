@@ -289,6 +289,13 @@ export default function Home() {
     setTimeout(() => go(step2), 60);
   }
 
+  // Hero cards: 0 = the prompt, 1 = the needs, 2 = the answers. Jump to the furthest step reached.
+  function jumpFromHero(card: 0 | 1 | 2) {
+    if (card === 2 && opt) go(step3);
+    else if (card >= 1 && canOptimize) go(stepNeeds);
+    else go(step1);
+  }
+
   const toggle = (id: TechniqueId) =>
     setTechniques((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
 
@@ -324,7 +331,7 @@ export default function Home() {
         </div>
       </header>
 
-      <Hero onCheck={loadPrompt} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
+      <Hero onCheck={loadPrompt} onJump={jumpFromHero} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
 
       <div className="workspace">
         <main>
