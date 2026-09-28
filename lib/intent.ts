@@ -97,7 +97,7 @@ export function intentStatement(prompt: string, intent: Intent | null | undefine
 }
 
 // Merge LLM suggestions with presets: keep up to 3 valid, short, distinct options per field.
-export function mergeOptions(fromLlm: Partial<Record<string, unknown>> | null, presets: IntentOptions): IntentOptions {
+export function mergeOptions(fromLlm: Partial<Record<string, unknown>> | null, presets: IntentOptions, opts: { openLength?: boolean } = {}): IntentOptions {
   const out = { ...presets };
   if (!fromLlm) return out;
   for (const key of Object.keys(presets) as (keyof IntentOptions)[]) {
@@ -109,7 +109,7 @@ export function mergeOptions(fromLlm: Partial<Record<string, unknown>> | null, p
       .map((x) => x.charAt(0).toUpperCase() + x.slice(1))
       .filter((x) => x.length > 1 && x.length <= 60);
     const unique = [...new Set(clean)].slice(0, 3);
-    if (unique.length >= 2) out[key] = key === "length" ? [...unique, "As long as needed"].slice(0, 4) : unique;
+    if (unique.length >= 2) out[key] = key === "length" && opts.openLength !== false ? [...unique, "As long as needed"].slice(0, 4) : unique;
   }
   return out;
 }

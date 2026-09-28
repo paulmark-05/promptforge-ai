@@ -165,3 +165,53 @@ test("offline optimizer uses confirmed needs and invents no word limit", async (
   const without = optimizeOffline("explain machine learning", [...all]);
   assert.doesNotMatch(without.optimizedPrompt, /\d+ words|\[/);
 });
+
+test("image analyzer: a bare subject scores low, a full description scores high", async () => {
+  const { analyzeImagePrompt } = await import("../lib/image.ts");
+  const bare = analyzeImagePrompt("a cat");
+  assert.ok(bare.score < 30, `bare ${bare.score}`);
+  assert.ok(bare.issues.some((i) => i.id === "img-style"));
+  const full = analyzeImagePrompt("a red fox sitting in fresh snow at the edge of a pine forest, wildlife photography, eye-level close-up, soft golden hour light, warm oranges and cool blues, sharp focus, high detail, without people");
+  assert.ok(full.score >= 85, `full ${full.score}`);
+  assert.equal(full.taskType, "image");
+});
+
+test("image sizes and free image URL", async () => {
+  const { sizeFor, imageUrl } = await import("../lib/image.ts");
+  assert.deepEqual(sizeFor("Landscape 16:9"), { width: 1024, height: 576, label: "16:9" });
+  assert.equal(sizeFor(undefined).label, "1:1");
+  const url = imageUrl("a cat, watercolor", "Portrait 9:16", 42);
+  assert.match(url, /^https:\/\/image\.pollinations\.ai\/prompt\/a%20cat%2C%20watercolor\?/);
+  assert.match(url, /seed=42/);
+  assert.match(url, /height=1024/);
+});
+
+test("offline image rewrite keeps the subject and adds the chosen look", async () => {
+  const { optimizeImageOffline } = await import("../lib/image.ts");
+  const { EMPTY_INTENT } = await import("../lib/intent.ts");
+  const r = optimizeImageOffline("a cat", { ...EMPTY_INTENT, goal: "Watercolor painting", tone: "Warm golden hour", notes: "no text" });
+  assert.match(r.optimizedPrompt, /^a cat, watercolor painting/);
+  assert.match(r.optimizedPrompt, /warm golden hour/);
+  assert.match(r.optimizedPrompt, /no text$/);
+});
+
+test("report HTML contains the key sections and escapes user text", async () => {
+  const { buildReportHtml } = await import("../lib/report.ts");
+  const { analyzePrompt } = await import("../lib/analyzer.ts");
+  const html = buildReportHtml({
+    kind: "text", audience: "Learning", createdAt: "2026-09-29T10:00:00.000Z", model: "m", live: false,
+    prompt: "explain <b>ML</b>", analysis: analyzePrompt("explain ML"), needs: [{ label: "Audience", value: "Beginner" }],
+    optimized: { prompt: "You are a teacher. Explain ML.", before: 17, after: 80, changes: [{ technique: "Role prompting", description: "Added a role" }], rationale: "r", mode: "offline" },
+  });
+  for (const s of ["Summary", "Prompt analysis", "What you need", "The rewritten prompt", "How to reuse this prompt", "Techniques explained"]) assert.ok(html.includes(s), s);
+  assert.ok(html.includes("explain &lt;b&gt;ML&lt;/b&gt;"));
+  assert.ok(!html.includes("<b>ML</b>"));
+});
+
+test("code snippets embed the prompt safely", async () => {
+  const { textSnippet, imageSnippet } = await import("../lib/snippets.ts");
+  const js = textSnippet("javascript", 'Say "hi"');
+  assert.match(js, /content: "Say \\"hi\\""/);
+  assert.match(imageSnippet("python", "a cat", "Square 1:1", 7), /seed=7/);
+  assert.match(imageSnippet("curl", "a cat", undefined, 7), /Authorization: Bearer \$POLLINATIONS_API_KEY/);
+});

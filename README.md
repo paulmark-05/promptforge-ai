@@ -14,24 +14,30 @@ A vague prompt makes the model guess. PromptForge shows what your prompt leaves 
 
 ## Features
 
-| Step | What the user can do |
-|------|----------------------|
-| 1. Check | Score any prompt 0–100 on 8 weighted dimensions (clarity, specificity, context, role, output format, constraints, examples, structure), see a grade, the detected task type and a ranked list of issues with fixes. Optional AI critique from the LLM. |
-| 2. Say what you need | Confirm who it is for, the purpose, length, format and tone, from suggested options or your own words. These needs drive the rewrite and are what both answers are judged against. |
-| 3. Rewrite | Pick techniques (role prompting, context, chain-of-thought, output format, constraints, few-shot, delimiters) and get a rewritten prompt with a before/after score and a list of every change. The result is editable and re-scored live. |
-| 4. Compare | Run both prompts on the same model. Each response is scored by an LLM judge on relevance, completeness, accuracy, clarity and instruction-following, plus rule-based checks (word limits, JSON validity, tables, code blocks, list counts, readability). |
-| Iterate | Use the optimized prompt as the new starting point and repeat. |
-| History | The last 20 optimizations are kept in the browser with their scores. |
-| Guardrails | Prompt-injection patterns are detected, capped at a score of 20 and never optimized or executed. User text is always passed to the LLM as tagged data. |
+The workspace is a deck of five cards. Each finished step flips to the next, and you can flip back at any time.
 
-PromptForge works in two modes:
+| Card | What happens |
+|------|--------------|
+| 1. Check | Score any prompt 0–100 (8 dimensions for text, 8 visual elements for images) with a ranked list of what is missing. |
+| 2. Needs | Confirm who it is for, the purpose, length, format and tone (for images: use, style, shape, framing, mood, what to avoid), from suggested options or your own words. |
+| 3. Rewrite | The prompt is rewritten around your needs with proven techniques, with a before/after score and every change explained. |
+| 4. Compare | Text: both prompts run on the same model and a bias-corrected judge compares the answers against your needs, plus cost. Images: both prompts are rendered with the same seed side by side. |
+| 5. Summary | Before/after, needs, changes, results and efficiency, downloadable as a designed HTML report (save as PDF) or JSON. |
 
-- **Live AI**: with an API key, the LLM does the critique, rewrite, generation and judging.
-- **Offline**: without a key, the rule-based analyzer and template optimizer still work, so the app is always usable.
+**Three modes**
+
+- **New to prompting:** plain language, the top issues only, one "Improve my prompt" button.
+- **Learning:** a short lesson (what, why, before/after) for every issue and change, and a "What you learned" recap.
+- **Developer:** ready-to-paste code (JavaScript, Python, curl), token estimates and JSON export.
+
+**Image prompts** are rendered by [Pollinations.ai](https://pollinations.ai). A free key from [enter.pollinations.ai](https://enter.pollinations.ai/keys) is needed for more than a couple of images; add it in Settings or as `POLLINATIONS_API_KEY`.
+
+![Summary card](docs/screenshots/11-summary.png)
 
 ## Tech stack
 
 - **Next.js 15 (App Router) + React 19 + TypeScript**: UI and serverless API routes in one project, deploys to Vercel with zero config.
+- **Pollinations.ai**: free image generation for image prompts (free key for regular use), called through a server route so the key stays private.
 - **Groq API (`openai/gpt-oss-120b`)**: free tier and very fast responses. Any OpenAI-compatible API works by changing `LLM_BASE_URL` and `LLM_MODEL`.
 - **Rule-based analyzer (TypeScript)**: deterministic, instant, works offline, and makes results reproducible for benchmarking.
 - **Node.js test runner**: unit tests with no extra dependencies.
@@ -51,7 +57,7 @@ Get a free Groq key at https://console.groq.com/keys. Without a key, the app run
 ## Tests and benchmark
 
 ```bash
-npm test            # 17 unit tests
+npm test            # 22 unit tests
 npm run benchmark   # scores 20 labelled prompts + 5 injection attempts
 ```
 
@@ -89,7 +95,8 @@ app/
   api/analyze/route.ts   rule-based analysis + optional AI critique
   api/optimize/route.ts  LLM rewrite, falls back to templates
   api/generate/route.ts  runs a prompt on the LLM
-  api/intent/route.ts    suggests likely needs for a prompt
+  api/intent/route.ts    suggests likely needs for a prompt (text or image)
+  api/image/route.ts     renders an image prompt with Pollinations.ai
   api/evaluate/route.ts  LLM judge + rule checks for a single answer
   api/compare/route.ts   head-to-head judge of two answers (one order per call)
   api/status/route.ts    reports whether a server key is configured
@@ -99,6 +106,10 @@ lib/
   metrics.ts             response checks (word limit, JSON, table, readability…)
   judge.ts               pairwise judge, both-order combining, bias handling
   intent.ts              needs model, presets, the judging yardstick
+  image.ts               image prompt analyzer, needs, offline rewrite, sizes
+  lessons.ts             technique lessons for Learning mode and the report
+  report.ts              downloadable HTML/JSON session report
+  snippets.ts            code snippets for Developer mode
   llm.ts                 OpenAI-compatible client + tolerant JSON parser
   prompts.ts             system prompts for critic, optimizer and judge
 tests/                   unit tests
@@ -109,7 +120,7 @@ scripts/benchmark.ts     evaluation script
 
 1. Push this repository to GitHub.
 2. On https://vercel.com/new, import the repository (framework is detected automatically).
-3. Add the environment variable `LLM_API_KEY` with your Groq key.
+3. Add the environment variable `LLM_API_KEY` with your Groq key, and optionally `POLLINATIONS_API_KEY` for images.
 4. Deploy.
 
 ## Security

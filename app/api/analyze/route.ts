@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { analyzePrompt } from "../../../lib/analyzer";
+import { analyzeImagePrompt } from "../../../lib/image";
 import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { CRITIC_SYSTEM, wrapPrompt } from "../../../lib/prompts";
 import { handle, readText, userKey } from "../../../lib/api";
@@ -9,12 +10,14 @@ export const maxDuration = 60;
 export const POST = handle(async (req) => {
   const body = await req.json();
   const prompt = readText(body.prompt, "prompt");
-  const analysis = analyzePrompt(prompt);
+  const image = body.kind === "image";
+  const analysis = image ? analyzeImagePrompt(prompt) : analyzePrompt(prompt);
 
   const cfg = getConfig(userKey(req));
   let critique = null;
   let warning: string | undefined;
-  if (body.ai !== false && cfg) {
+  // The AI critique is written for text prompts; image prompts use the image analyzer only.
+  if (body.ai !== false && cfg && !image) {
     try {
       const r = await chat(
         cfg,

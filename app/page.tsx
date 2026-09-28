@@ -4,11 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { analyzePrompt, type Analysis } from "../lib/analyzer";
 import { TECHNIQUES, type TechniqueId, type Change } from "../lib/optimizer";
 import type { ResponseMetrics } from "../lib/metrics";
-import { SAMPLE_PROMPTS } from "../lib/templates";
+import { IMAGE_SAMPLES, SAMPLE_PROMPTS } from "../lib/templates";
 import { Bar, CountUp, Icon, Logo, ScoreRing, SeverityTag, Spinner, scoreColor, scoreTone } from "../components/ui";
 import { Hero, type HeroDemo } from "../components/Hero";
 import { EMPTY_INTENT, INTENT_FIELDS, hasIntent, intentStatement, type Intent, type IntentOptions } from "../lib/intent";
 import { combineVerdicts, type PairwiseResult } from "../lib/judge";
+import { IMAGE_INTENT_FIELDS, analyzeImagePrompt, sizeFor, type ImageAnalysis } from "../lib/image";
+import { lessonFor, type Lesson } from "../lib/lessons";
+import { estimateTokens, imageSnippet, textSnippet, type SnippetLang } from "../lib/snippets";
+import { buildReportHtml, reportFileName, type ReportData } from "../lib/report";
 
 interface Critique { summary?: string; strengths?: string[]; weaknesses?: string[]; suggestions?: string[] }
 interface OptResult { optimizedPrompt: string; changes: Change[]; rationale: string; mode: "llm" | "offline"; before: number; after: number; warning?: string }
@@ -17,10 +21,15 @@ interface EvalResult { metrics: ResponseMetrics; judge: Judge | null; warning?: 
 interface RunResult { response: string; latencyMs: number; tokens?: { prompt: number; completion: number }; evaluation: EvalResult }
 type Pass = PairwiseResult & { metrics: { original: ResponseMetrics; optimized: ResponseMetrics } };
 interface Runs { original: RunResult; optimized: RunResult; winner: PairwiseResult["winner"]; reason: string; consistent: boolean; intentUsed: boolean }
-interface HistoryItem { id: string; at: number; original: string; optimized: string; before: number; after: number; evalOriginal?: number; evalOptimized?: number }
+interface HistoryItem { id: string; at: number; original: string; optimized: string; before: number; after: number; evalOriginal?: number; evalOptimized?: number; kind?: Kind }
+type PromptAnalysis = Analysis | ImageAnalysis;
+type Kind = "text" | "image";
+type Audience = "beginner" | "learner" | "developer";
 
 const KEY_STORE = "pf_user_key";
 const HISTORY_STORE = "pf_history";
+const MODE_STORE = "pf_mode";
+const IMAGE_KEY_STORE = "pf_image_key";
 const DEFAULT_TECHNIQUES: TechniqueId[] = ["role", "context", "cot", "format", "constraints", "delimiters"];
 const CRITERIA_LABELS: Record<string, string> = {
   relevance: "Relevance",
@@ -30,6 +39,12 @@ const CRITERIA_LABELS: Record<string, string> = {
   conciseness: "Conciseness",
   instruction_following: "Instruction following",
 };
+const AUDIENCES: { id: Audience; label: string; blurb: string }[] = [
+  { id: "beginner", label: "New to prompting", blurb: "Plain language, one button to improve" },
+  { id: "learner", label: "Learning", blurb: "A short lesson for every issue and change" },
+  { id: "developer", label: "Developer", blurb: "Code snippets, tokens and JSON export" },
+];
+const STEPS = ["Check", "Needs", "Rewrite", "Compare", "Summary"];
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -44,15 +59,28 @@ function save(key: string, value: unknown) {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {}
 }
+function download(filename: string, content: string, type: string) {
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
 
 export default function Home() {
-  const [status, setStatus] = useState<{ serverKey: boolean; model: string } | null>(null);
+  const [status, setStatus] = useState<{ serverKey: boolean; imageKey?: boolean; model: string } | null>(null);
   const [userKey, setUserKey] = useState("");
+  const [imageKey, setImageKey] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [audience, setAudience] = useState<Audience>("beginner");
+  const [kind, setKind] = useState<Kind>("text");
 
   const [prompt, setPrompt] = useState("");
-  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [analysis, setAnalysis] = useState<PromptAnalysis | null>(null);
   const [critique, setCritique] = useState<Critique | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -74,10 +102,22 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
+  // Image comparison: both prompts rendered with the same seed and shape, one after
+  // the other (the free image service handles one request at a time). Images are
+  // kept as data URLs so the downloaded report still shows them offline.
+  const [seed, setSeed] = useState(0);
+  const [images, setImages] = useState<{ a?: string; b?: string }>({});
+  const [imgBusy, setImgBusy] = useState<"a" | "b" | null>(null);
+
+  // The deck: one card per step; the card flips when the step changes.
+  const [view, setView] = useState(0);
+  const [dir, setDir] = useState(1);
+
   // Presentation-only state
   const [scrolled, setScrolled] = useState(false);
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const deckRef = useRef<HTMLOListElement>(null);
   const belowRef = useRef<HTMLDivElement>(null);
   const dotsIdle = useRef(0);
 
@@ -96,16 +136,12 @@ export default function Home() {
     window.clearTimeout(dotsIdle.current);
     belowRef.current?.classList.remove("dots-on");
   }
-  const step1 = useRef<HTMLElement>(null);
-  const stepNeeds = useRef<HTMLElement>(null);
-  const step2 = useRef<HTMLElement>(null);
-  const step3 = useRef<HTMLElement>(null);
-  const optResultRef = useRef<HTMLDivElement>(null);
-  const compareRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setUserKey(load(KEY_STORE, ""));
+    setImageKey(load(IMAGE_KEY_STORE, ""));
     setHistory(load(HISTORY_STORE, []));
+    setAudience(load(MODE_STORE, "beginner"));
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => setStatus({ serverKey: false, model: "" }));
     const onScroll = () => {
       setScrolled(window.scrollY > 8);
@@ -118,18 +154,15 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // Bring newly produced results into view so the user never has to hunt for them.
-  useEffect(() => {
-    if (opt) optResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [opt]);
-  useEffect(() => {
-    if (runs) compareRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [runs]);
-
   const live = Boolean(status?.serverKey || userKey);
-  const optLive = useMemo(() => (optText.trim() ? analyzePrompt(optText) : null), [optText]);
-  const stage = runs ? 4 : opt ? 3 : intentDone ? 2 : analysis ? 1 : 0; // completed steps
+  const scoreOf = (text: string): PromptAnalysis => (kind === "image" ? analyzeImagePrompt(text) : analyzePrompt(text));
+  const optLive = useMemo(() => (optText.trim() ? scoreOf(optText) : null), [optText, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const confirmedIntent = intentDone === "confirmed" && hasIntent(intent) ? intent : null;
+  const canOptimize = Boolean(analysis && !analysis.injectionRisk);
+  const fields = kind === "image" ? IMAGE_INTENT_FIELDS : INTENT_FIELDS;
+  const done = [Boolean(analysis), Boolean(intentDone), Boolean(opt), Boolean(runs || (kind === "image" && images.b)), false];
+  const reachable = [true, canOptimize, Boolean(intentDone), Boolean(opt), Boolean(opt)];
+  const shape = kind === "image" ? confirmedIntent?.length : undefined;
 
   // The hero cards tell the before-to-after story. Before the user does anything
   // they show an example; afterwards they reflect the user's own prompt and results.
@@ -144,21 +177,26 @@ export default function Home() {
       };
     }
     const ids = new Set(analysis.issues.map((i) => i.id));
-    const guesses = [
-      ids.has("no-context") && "Who is it for?",
-      (ids.has("no-constraints") || ids.has("too-short")) && "How long?",
-      ids.has("no-format") && "What format?",
-      ids.has("vague") && "What does good mean?",
-    ].filter((x): x is string => Boolean(x));
+    const guesses = (kind === "image"
+      ? [ids.has("img-style") && "What style?", ids.has("img-lighting") && "What light?", ids.has("img-composition") && "What framing?", ids.has("img-subject") && "What exactly?"]
+      : [
+          ids.has("no-context") && "Who is it for?",
+          (ids.has("no-constraints") || ids.has("too-short")) && "How long?",
+          ids.has("no-format") && "What format?",
+          ids.has("vague") && "What does good mean?",
+        ]
+    ).filter((x): x is string => Boolean(x));
     const needs = confirmedIntent
-      ? [confirmedIntent.audience && `For ${lowerFirst(confirmedIntent.audience)}`, confirmedIntent.length, confirmedIntent.format, confirmedIntent.tone]
+      ? (kind === "image"
+          ? [confirmedIntent.goal, confirmedIntent.length, confirmedIntent.format, confirmedIntent.tone]
+          : [confirmedIntent.audience && `For ${lowerFirst(confirmedIntent.audience)}`, confirmedIntent.length, confirmedIntent.format, confirmedIntent.tone]
+        )
           .filter((x): x is string => Boolean(x && x.trim()))
           .map((x) => (x.length > 28 ? `${x.slice(0, 26)}…` : x))
       : [];
     const outcome = runs ? (runs.winner === "optimized" ? "better" : runs.winner === "tie" ? "close" : "worse") : null;
     return { prompt: prompt.length > 70 ? `${prompt.slice(0, 68)}…` : prompt, guesses: guesses.slice(0, 3), needs, outcome, live: true };
-  }, [analysis, confirmedIntent, runs, prompt]);
-  const canOptimize = Boolean(analysis && !analysis.injectionRisk);
+  }, [analysis, confirmedIntent, runs, prompt, kind]);
 
   async function api<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(path, {
@@ -171,6 +209,12 @@ export default function Home() {
     return data as T;
   }
 
+  function goView(v: number) {
+    setDir(v >= view ? 1 : -1);
+    setView(v);
+    requestAnimationFrame(() => deckRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
+
   function resetDownstream() {
     setOpt(null);
     setOptText("");
@@ -178,22 +222,24 @@ export default function Home() {
     setManualEval(null);
     setWarning(null);
     setError(null);
+    setSeed(0);
+    setImages({});
   }
 
-  async function analyze(text = prompt) {
+  async function analyze(text = prompt, k: Kind = kind) {
     if (!text.trim()) return;
     setAnalyzing(true);
     resetDownstream();
     setCritique(null);
     try {
-      const r = await api<{ analysis: Analysis; critique: Critique | null; warning?: string }>("/api/analyze", { prompt: text });
+      const r = await api<{ analysis: PromptAnalysis; critique: Critique | null; warning?: string }>("/api/analyze", { prompt: text, kind: k });
       setAnalysis(r.analysis);
       setCritique(r.critique);
       setIntent(EMPTY_INTENT);
       setIntentDone(null);
       setIntentOptions(null);
       if (!r.analysis.injectionRisk) {
-        api<{ options: IntentOptions }>("/api/intent", { prompt: text })
+        api<{ options: IntentOptions }>("/api/intent", { prompt: text, kind: k })
           .then((o) => setIntentOptions(o.options))
           .catch(() => setIntentOptions(null));
       }
@@ -208,13 +254,14 @@ export default function Home() {
   async function optimize() {
     setOptimizing(true);
     setRuns(null);
+    setSeed(0);
     setError(null);
     try {
-      const r = await api<OptResult>("/api/optimize", { prompt, techniques, intent: confirmedIntent });
+      const r = await api<OptResult>("/api/optimize", { prompt, techniques, intent: confirmedIntent, kind });
       setOpt(r);
       setOptText(r.optimizedPrompt);
       if (r.warning) setWarning(r.warning);
-      pushHistory({ original: prompt, optimized: r.optimizedPrompt, before: r.before, after: r.after });
+      pushHistory({ original: prompt, optimized: r.optimizedPrompt, before: r.before, after: r.after, kind });
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -234,7 +281,7 @@ export default function Home() {
       // Sequential rather than parallel: free-tier keys have a low tokens-per-minute limit.
       const a = await generate(prompt);
       const b = await generate(optText);
-      // Head-to-head judging against the ORIGINAL request, once in each order to cancel position bias.
+      // Head-to-head judging against the stated needs, once in each order to cancel position bias.
       const body = { originalPrompt: prompt, optimizedPrompt: optText, originalAnswer: a.text, optimizedAnswer: b.text, intent: confirmedIntent };
       const p1 = await api<Pass>("/api/compare", { ...body, swap: false });
       const p2 = await api<Pass>("/api/compare", { ...body, swap: true });
@@ -256,6 +303,44 @@ export default function Home() {
     }
   }
 
+  async function fetchImage(p: string, s: number): Promise<string> {
+    const res = await fetch("/api/image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(imageKey ? { "x-image-key": imageKey } : {}) },
+      body: JSON.stringify({ prompt: p, shape, seed: s }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || `Image request failed (${res.status})`);
+    }
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(new Error("Could not read the image."));
+      r.readAsDataURL(blob);
+    });
+  }
+
+  async function renderImages() {
+    const s = Math.floor(Math.random() * 90000) + 1000;
+    setSeed(s);
+    setImages({});
+    setError(null);
+    try {
+      setImgBusy("a");
+      const a = await fetchImage(prompt, s);
+      setImages({ a });
+      setImgBusy("b");
+      const b = await fetchImage(optText, s);
+      setImages({ a, b });
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImgBusy(null);
+    }
+  }
+
   async function evaluateManual() {
     setError(null);
     try {
@@ -273,24 +358,38 @@ export default function Home() {
     });
   }
 
-  function loadPrompt(p: string) {
+  function switchKind(k: Kind) {
+    if (k === kind) return;
+    setKind(k);
+    setPrompt("");
+    setAnalysis(null);
+    setCritique(null);
+    setIntent(EMPTY_INTENT);
+    setIntentDone(null);
+    setIntentOptions(null);
+    resetDownstream();
+    goView(0);
+  }
+
+  function loadPrompt(p: string, k: Kind = kind) {
+    if (k !== kind) setKind(k);
     setPrompt(p);
     setAnalysis(null);
     setCritique(null);
     resetDownstream();
-    analyze(p);
-    step1.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    analyze(p, k);
+    goView(0);
   }
 
   function iterate() {
     setPrompt(optText);
     analyze(optText);
-    step1.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    goView(0);
   }
 
-  async function copyOptimized() {
+  async function copyText(text: string) {
     try {
-      await navigator.clipboard.writeText(optText);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {}
@@ -303,43 +402,93 @@ export default function Home() {
       setOpt(null);
       setOptText("");
       setRuns(null);
+      setSeed(0);
     }
   }
 
   function finishIntent(mode: "confirmed" | "skipped") {
     if (mode === "skipped") setIntent(EMPTY_INTENT);
     setIntentDone(mode);
-    setTimeout(() => go(step2), 60);
+    goView(2);
+  }
+
+  function chooseAudience(a: Audience) {
+    setAudience(a);
+    save(MODE_STORE, a);
   }
 
   // Hero cards: 0 = the prompt, 1 = the needs, 2 = the answers. Before any analysis
-  // the first card runs the example; afterwards each card jumps to its step.
+  // the first card runs the example; afterwards each card opens its step.
   function openFromHero(card: 0 | 1 | 2) {
-    if (!analysis) return loadPrompt(heroDemo.prompt);
-    if (card === 2 && opt) go(step3);
-    else if (card >= 1 && canOptimize) go(stepNeeds);
-    else go(step1);
+    if (!analysis) return loadPrompt(heroDemo.prompt, "text");
+    if (card === 2 && opt) goView(3);
+    else if (card >= 1 && canOptimize) goView(1);
+    else goView(0);
   }
 
   const toggle = (id: TechniqueId) =>
     setTechniques((t) => (t.includes(id) ? t.filter((x) => x !== id) : [...t, id]));
 
-  const go = (ref: React.RefObject<HTMLElement | null>) => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  const marker = (n: number) => (stage >= n ? "done" : stage === n - 1 ? "current" : "");
+  function reportData(): ReportData {
+    const needs = confirmedIntent
+      ? fields.filter((f) => confirmedIntent[f.key]?.trim()).map((f) => ({ label: f.label, value: confirmedIntent[f.key].trim() }))
+      : [];
+    const side = (r: RunResult) => ({
+      overall: r.evaluation.judge?.overall ?? 0,
+      scores: r.evaluation.judge?.scores ?? {},
+      feedback: r.evaluation.judge?.feedback ?? "",
+      words: r.evaluation.metrics.wordCount,
+      tokens: r.tokens?.completion,
+      latencyMs: r.latencyMs,
+      checks: r.evaluation.metrics.checks,
+      answer: r.response,
+    });
+    return {
+      kind,
+      audience: AUDIENCES.find((a) => a.id === audience)!.label,
+      createdAt: new Date().toISOString(),
+      model: status?.model ?? "",
+      live,
+      prompt,
+      analysis: analysis!,
+      needs,
+      optimized: opt ? { prompt: optText, before: opt.before, after: optLive?.score ?? opt.after, changes: opt.changes, rationale: opt.rationale, mode: opt.mode } : undefined,
+      comparison: runs
+        ? { winner: runs.winner, reason: runs.reason, consistent: runs.consistent, judgedAgainst: runs.intentUsed ? "your stated needs" : "your original request", original: side(runs.original), optimized: side(runs.optimized) }
+        : undefined,
+      images: kind === "image" && images.a && images.b ? { originalUrl: images.a, optimizedUrl: images.b, seed, shape: sizeFor(shape).label } : undefined,
+    };
+  }
+  function downloadReport() {
+    const d = reportData();
+    download(reportFileName(d, "html"), buildReportHtml(d), "text/html");
+  }
+  function openPrintable() {
+    const url = URL.createObjectURL(new Blob([buildReportHtml(reportData())], { type: "text/html" }));
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+  function downloadJson() {
+    const d = reportData();
+    download(reportFileName(d, "json"), JSON.stringify(d, null, 2), "application/json");
+  }
+
+  const learner = audience === "learner";
+  const developer = audience === "developer";
+  const beginner = audience === "beginner";
+  const samples = kind === "image" ? IMAGE_SAMPLES : SAMPLE_PROMPTS;
 
   return (
     <>
-
       <header className={`nav ${scrolled ? "scrolled" : ""}`}>
         <div className="nav-left">
           <a className="logo" href="#top" onClick={(e) => { e.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
             <Logo /> PromptForge
           </a>
           <nav className="nav-links" aria-label="Workflow">
-            <button className="nav-link" onClick={() => go(step1)}>Analyze</button>
-            <button className="nav-link" disabled={!canOptimize} onClick={() => go(stepNeeds)}>Needs</button>
-            <button className="nav-link" disabled={!intentDone} onClick={() => go(step2)}>Optimize</button>
-            <button className="nav-link" disabled={!opt} onClick={() => go(step3)}>Evaluate</button>
+            {STEPS.map((s, i) => (
+              <button key={s} className={`nav-link ${view === i ? "active" : ""}`} disabled={!reachable[i]} onClick={() => goView(i)}>{s}</button>
+            ))}
           </nav>
         </div>
         <div className="nav-right">
@@ -355,7 +504,7 @@ export default function Home() {
         </div>
       </header>
 
-      <Hero onCheck={loadPrompt} onOpen={openFromHero} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
+      <Hero onCheck={(t) => loadPrompt(t)} onOpen={openFromHero} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
 
       <div className="below" ref={belowRef} onPointerMove={dotsMove} onPointerLeave={dotsLeave}>
       <div className="page-bg" aria-hidden>
@@ -367,119 +516,165 @@ export default function Home() {
       </div>
       <div className="workspace">
         <main>
-          <div className="flow">
-            <div className="rail">
-              <div className="rail-fill" style={{ height: `${(Math.min(stage, 3) / 3) * 100}%` }} />
+          <div className="deck-head">
+            <div className="modes" role="radiogroup" aria-label="Who is this for">
+              {AUDIENCES.map((a) => (
+                <button key={a.id} role="radio" aria-checked={audience === a.id} className={`mode ${audience === a.id ? "on" : ""}`} onClick={() => chooseAudience(a.id)} title={a.blurb}>
+                  <b>{a.label}</b>
+                  <span>{a.blurb}</span>
+                </button>
+              ))}
             </div>
+            <div className="kind" role="radiogroup" aria-label="Prompt type">
+              {(["text", "image"] as const).map((k) => (
+                <button key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => switchKind(k)}>
+                  {k === "text" ? "Text prompt" : "Image prompt"}
+                </button>
+              ))}
+            </div>
+          </div>
 
-            {/* Step 1: Analyze */}
-            <section className="step" ref={step1} id="analyze">
-              <span className={`step-marker ${marker(1)}`}>{stage >= 1 ? <Icon.check /> : "01"}</span>
-              <div className="panel">
-                <div className="panel-head">
-                  <h3>Write your prompt</h3>
-                  <span className="hint">Scored instantly, no API key needed</span>
-                </div>
-                <div className="editor-wrap">
-                  <textarea
-                    ref={editorRef}
-                    className="editor"
-                    value={prompt}
-                    maxLength={6000}
-                    placeholder="e.g. explain machine learning"
-                    aria-label="Prompt"
-                    onChange={(e) => setPrompt(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
-                    }}
-                  />
-                  <div className="editor-bar">
-                    <span className="kbd"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to analyze</span>
-                    <div className="row" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <span className="counter">{prompt.length.toLocaleString()} / 6,000</span>
-                      <button className="btn primary" disabled={!prompt.trim() || analyzing} onClick={() => analyze()}>
-                        {analyzing ? <Spinner /> : null} {analyzing ? "Analyzing" : "Analyze"}
-                      </button>
+          <ol className="stepper" ref={deckRef}>
+            {STEPS.map((s, i) => (
+              <li key={s} className={`${view === i ? "current" : ""} ${done[i] ? "done" : ""}`}>
+                <button disabled={!reachable[i]} onClick={() => goView(i)}>
+                  <span className="n">{done[i] && view !== i ? <Icon.check size={12} /> : String(i + 1).padStart(2, "0")}</span>
+                  {s}
+                </button>
+              </li>
+            ))}
+          </ol>
+
+          <div className="deck">
+            <section key={`${view}-${kind}`} className={`flipcard ${dir > 0 ? "fwd" : "back"}`} aria-live="polite">
+              {/* ---------- 1. Check ---------- */}
+              {view === 0 && (
+                <div className="panel" id="analyze">
+                  <div className="panel-head">
+                    <h3>{kind === "image" ? "Describe the image you want" : beginner ? "Type what you want to ask an AI" : "Write your prompt"}</h3>
+                    <span className="hint">
+                      {beginner ? "We'll show what's missing, in plain words" : learner ? "Scored on the skills good prompts use" : "Rule-based score in about 1 ms, no key needed"}
+                    </span>
+                  </div>
+                  <div className="editor-wrap">
+                    <textarea
+                      ref={editorRef}
+                      className="editor"
+                      value={prompt}
+                      maxLength={6000}
+                      placeholder={kind === "image" ? "e.g. a cat" : "e.g. explain machine learning"}
+                      aria-label="Prompt"
+                      onChange={(e) => setPrompt(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
+                      }}
+                    />
+                    <div className="editor-bar">
+                      <span className="kbd"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to check</span>
+                      <div className="row" style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <span className="counter">{developer ? `~${estimateTokens(prompt)} tokens · ` : ""}{prompt.length.toLocaleString()} / 6,000</span>
+                        <button className="btn primary" disabled={!prompt.trim() || analyzing} onClick={() => analyze()}>
+                          {analyzing ? <Spinner /> : null} {analyzing ? "Checking" : "Check prompt"}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
+                  {!analysis && !analyzing && (
+                    <div className="try-samples" style={{ marginTop: 16 }}>
+                      <span>Try</span>
+                      {samples.slice(0, 4).map((s) => (
+                        <button key={s.title} className="chip" onClick={() => loadPrompt(s.prompt)}>{s.prompt.length > 30 ? `${s.prompt.slice(0, 28)}…` : s.prompt}</button>
+                      ))}
+                    </div>
+                  )}
 
-                {analyzing && !analysis && <AnalysisSkeleton />}
+                  {analyzing && !analysis && <AnalysisSkeleton />}
 
-                {analysis && (
-                  <div key={analysis.score + analysis.wordCount} style={{ marginTop: 32 }}>
-                    <div className="analysis">
-                      <div className="score-box">
-                        <ScoreRing score={analysis.score} />
-                        <p className="score-caption">How clearly the prompt says what you want. A low score means the model has to guess.</p>
-                        <div className="score-meta">
-                          <span className={`tag ${scoreTone(analysis.score)}`}>Grade {analysis.grade}</span>
-                          <span className="tag">{analysis.taskType}</span>
-                          <span className="tag">{analysis.wordCount} words</span>
+                  {analysis && (
+                    <div key={analysis.score + analysis.wordCount} style={{ marginTop: 32 }}>
+                      <div className="analysis">
+                        <div className="score-box">
+                          <ScoreRing score={analysis.score} />
+                          <p className="score-caption">
+                            {kind === "image" ? "How fully the prompt describes the image. A low score means the model fills in the gaps." : "How clearly the prompt says what you want. A low score means the model has to guess."}
+                          </p>
+                          <div className="score-meta">
+                            <span className={`tag ${scoreTone(analysis.score)}`}>Grade {analysis.grade}</span>
+                            <span className="tag">{analysis.taskType}</span>
+                            <span className="tag">{analysis.wordCount} words</span>
+                          </div>
+                        </div>
+                        <div className="bars">
+                          {analysis.dimensions.map((d, i) => (
+                            <Bar key={d.key} index={i} label={d.label} value={d.score} hint={`${d.note} (weight ${d.weight}%)`} />
+                          ))}
                         </div>
                       </div>
-                      <div className="bars">
-                        {analysis.dimensions.map((d, i) => (
-                          <Bar key={d.key} index={i} label={d.label} value={d.score} hint={`${d.note} (weight ${d.weight}%)`} />
-                        ))}
-                      </div>
+
+                      {analysis.injectionRisk && (
+                        <div className="notice bad">
+                          <Icon.alert />
+                          <span>Prompt-injection pattern detected. PromptForge will not optimize or run instructions that try to override system rules.</span>
+                        </div>
+                      )}
+
+                      {analysis.issues.length > 0 && (
+                        <>
+                          <div className="subhead">{beginner ? "What's missing" : "Issues found"} <span className="tag">{analysis.issues.length}</span></div>
+                          <ul className="issues">
+                            {(beginner ? analysis.issues.slice(0, 4) : analysis.issues).map((i, idx) => {
+                              const lesson = lessonFor(i.technique);
+                              return (
+                                <li className="issue" key={i.id} style={{ "--i": idx } as React.CSSProperties}>
+                                  <SeverityTag severity={i.severity} />
+                                  <div>
+                                    {!beginner && <div className="tech">{i.technique}</div>}
+                                    <div className="msg">{beginner ? i.suggestion : i.message}</div>
+                                    {!beginner && <div className="fix">{i.suggestion}</div>}
+                                    {learner && lesson && <LessonBox lesson={lesson} />}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </>
+                      )}
+
+                      {critique && !beginner && (
+                        <div className="critique">
+                          <div className="subhead" style={{ margin: "0 0 8px" }}>AI critique</div>
+                          {critique.summary && <p>{critique.summary}</p>}
+                          {!!critique.weaknesses?.length && (<><div className="label">Weaknesses</div><ul>{critique.weaknesses.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
+                          {!!critique.suggestions?.length && (<><div className="label">Suggestions</div><ul>{critique.suggestions.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
+                        </div>
+                      )}
+
+                      {canOptimize && (
+                        <div className="actions end">
+                          <button className="btn primary" onClick={() => goView(1)}>Next: say what you need <Icon.arrow /></button>
+                        </div>
+                      )}
                     </div>
+                  )}
+                </div>
+              )}
 
-                    {analysis.injectionRisk && (
-                      <div className="notice bad">
-                        <Icon.alert />
-                        <span>Prompt-injection pattern detected. PromptForge will not optimize or run instructions that try to override system rules.</span>
-                      </div>
-                    )}
-
-                    {analysis.issues.length > 0 && (
-                      <>
-                        <div className="subhead">Issues found <span className="tag">{analysis.issues.length}</span></div>
-                        <ul className="issues">
-                          {analysis.issues.map((i, idx) => (
-                            <li className="issue" key={i.id} style={{ "--i": idx } as React.CSSProperties}>
-                              <SeverityTag severity={i.severity} />
-                              <div>
-                                <div className="tech">{i.technique}</div>
-                                <div className="msg">{i.message}</div>
-                                <div className="fix">{i.suggestion}</div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-
-                    {critique && (
-                      <div className="critique">
-                        <div className="subhead" style={{ margin: "0 0 8px" }}>AI critique</div>
-                        {critique.summary && <p>{critique.summary}</p>}
-                        {!!critique.weaknesses?.length && (<><div className="label">Weaknesses</div><ul>{critique.weaknesses.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
-                        {!!critique.suggestions?.length && (<><div className="label">Suggestions</div><ul>{critique.suggestions.map((w, i) => <li key={i}>{w}</li>)}</ul></>)}
-                      </div>
-                    )}
-
-                    {canOptimize && !intentDone && (
-                      <div className="actions">
-                        <button className="btn" onClick={() => go(stepNeeds)}>Next: say what you need <Icon.arrow /></button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
-
-            {/* Step 2: Say what you need */}
-            {canOptimize && (
-              <section className="step" ref={stepNeeds} id="needs">
-                <span className={`step-marker ${marker(2)}`}>{stage >= 2 ? <Icon.check /> : "02"}</span>
-                <div className="panel">
+              {/* ---------- 2. Needs ---------- */}
+              {view === 1 && canOptimize && (
+                <div className="panel" id="needs">
                   <div className="panel-head">
-                    <h3>Say what you need</h3>
-                    <span className="hint">The model cannot guess these. Pick an option or type your own.</span>
+                    <h3>{kind === "image" ? "Describe the look you want" : "Say what you need"}</h3>
+                    <span className="hint">{kind === "image" ? "Pick an option or type your own." : "The model cannot guess these. Pick an option or type your own."}</span>
                   </div>
+                  {learner && (
+                    <p className="learn-note">
+                      {kind === "image"
+                        ? "Image models draw what you name. Style, framing and light change the result more than anything else."
+                        : "Most weak answers come from missing context: who it is for, how long, and in what format. Stating them is the single biggest improvement."}
+                    </p>
+                  )}
                   <div className="needs">
-                    {INTENT_FIELDS.map((f) => {
+                    {fields.map((f) => {
                       const options = f.key === "notes" ? [] : intentOptions?.[f.key] ?? [];
                       return (
                         <div className="need" key={f.key}>
@@ -513,7 +708,7 @@ export default function Home() {
                       );
                     })}
                   </div>
-                  {hasIntent(intent) && (
+                  {hasIntent(intent) && kind === "text" && (
                     <div className="needs-preview">
                       <span className="label">What both answers will be judged against</span>
                       <div className="pane-body">{intentStatement(prompt, intent)}</div>
@@ -522,50 +717,47 @@ export default function Home() {
                   <div className="actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
                     <button className="btn ghost" onClick={() => finishIntent("skipped")}>Skip, keep it open</button>
                     <button className="btn primary" disabled={!hasIntent(intent)} onClick={() => finishIntent("confirmed")}>
-                      Confirm needs <Icon.arrow />
+                      Confirm and continue <Icon.arrow />
                     </button>
                   </div>
-                  {intentDone === "skipped" && (
-                    <div className="notice info">
-                      <Icon.alert />
-                      <span>No needs confirmed. The rewrite will add structure only, and answers can only be judged against your original wording.</span>
-                    </div>
-                  )}
                 </div>
-              </section>
-            )}
+              )}
 
-            {/* Step 3: Optimize */}
-            {canOptimize && intentDone && (
-              <section className="step" ref={step2} id="optimize">
-                <span className={`step-marker ${marker(3)}`}>{stage >= 3 ? <Icon.check /> : "03"}</span>
-                <div className="panel">
+              {/* ---------- 3. Rewrite ---------- */}
+              {view === 2 && canOptimize && intentDone && (
+                <div className="panel" id="optimize">
                   <div className="panel-head">
-                    <h3>Choose techniques</h3>
+                    <h3>{kind === "image" ? "Rewrite the image prompt" : beginner ? "Improve your prompt" : "Choose techniques"}</h3>
                     <span className="hint">{live ? "Rewritten by the LLM" : "Rewritten with offline templates"}</span>
                   </div>
-                  <div className="chips" role="group" aria-label="Techniques">
-                    {TECHNIQUES.map((t) => {
-                      const on = techniques.includes(t.id);
-                      return (
-                        <button key={t.id} className={`chip ${on ? "on" : ""}`} aria-pressed={on} title={t.description} onClick={() => toggle(t.id)}>
-                          <span className="tick"><Icon.check size={10} /></span>
-                          {t.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  {intentDone === "skipped" && (
+                    <div className="notice info" style={{ marginTop: 0, marginBottom: 16 }}>
+                      <Icon.alert />
+                      <span>No needs confirmed, so the rewrite can only add structure. <button className="linklike" onClick={() => goView(1)}>Add needs</button></span>
+                    </div>
+                  )}
+                  {kind === "text" &&
+                    (beginner ? (
+                      <details className="disclose" style={{ marginTop: 0 }}>
+                        <summary><Icon.chevron /> Advanced: choose techniques ({techniques.length} on)</summary>
+                        <div><TechniqueChips techniques={techniques} toggle={toggle} /></div>
+                      </details>
+                    ) : (
+                      <TechniqueChips techniques={techniques} toggle={toggle} learner={learner} />
+                    ))}
                   <div className="actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                    <span className="hint" style={{ fontSize: 13, color: "var(--muted)" }}>{techniques.length} of {TECHNIQUES.length} selected</span>
-                    <button className="btn primary" disabled={optimizing || techniques.length === 0} onClick={optimize}>
-                      {optimizing ? <Spinner /> : null} {optimizing ? "Optimizing" : "Optimize prompt"}
+                    <span className="hint" style={{ fontSize: 13, color: "var(--muted)" }}>
+                      {kind === "image" ? "Keeps your subject; adds the style, framing and mood you chose" : `${techniques.length} of ${TECHNIQUES.length} techniques`}
+                    </span>
+                    <button className="btn primary" disabled={optimizing || (kind === "text" && techniques.length === 0)} onClick={optimize}>
+                      {optimizing ? <Spinner /> : null} {optimizing ? "Rewriting" : opt ? "Rewrite again" : beginner ? "Improve my prompt" : "Rewrite prompt"}
                     </button>
                   </div>
 
                   {optimizing && !opt && <div className="shimmer" style={{ marginTop: 24, height: 120, borderRadius: 12, background: "var(--surface-2)" }} />}
 
                   {opt && (
-                    <div ref={optResultRef} style={{ marginTop: 32, scrollMarginTop: 96 }}>
+                    <div style={{ marginTop: 28 }}>
                       <div className="delta">
                         <span className="label">Prompt score</span>
                         <span className="num" style={{ color: scoreColor(opt.before) }}>{opt.before}</span>
@@ -589,40 +781,82 @@ export default function Home() {
                       {opt.rationale && <p className="rationale">{opt.rationale}</p>}
                       {opt.changes.length > 0 && (
                         <ul className="changes">
-                          {opt.changes.map((c, i) => (
-                            <li key={i} style={{ "--i": i } as React.CSSProperties}><b>{c.technique}</b><span>{c.description}</span></li>
-                          ))}
+                          {opt.changes.map((c, i) => {
+                            const lesson = lessonFor(c.technique);
+                            return (
+                              <li key={i} style={{ "--i": i } as React.CSSProperties}>
+                                <b>{c.technique}</b>
+                                <span>
+                                  {c.description}
+                                  {learner && lesson && <LessonBox lesson={lesson} />}
+                                </span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       )}
+                      {developer && <CodePanel kind={kind} prompt={optText} shape={shape} seed={seed || 42} model={status?.model} />}
                       <div className="actions">
-                        <button className="btn" onClick={copyOptimized}>
+                        <button className="btn" onClick={() => copyText(optText)}>
                           {copied ? <Icon.check /> : <Icon.copy />} {copied ? "Copied" : "Copy prompt"}
                         </button>
                         <button className="btn" onClick={iterate}><Icon.loop /> Use as new prompt</button>
-                        <button className="btn ghost" onClick={() => go(step3)}>Next: evaluate <Icon.arrow /></button>
+                        <button className="btn primary push" onClick={() => goView(3)}>Next: compare <Icon.arrow /></button>
                       </div>
                     </div>
                   )}
                 </div>
-              </section>
-            )}
+              )}
 
-            {/* Step 4: Evaluate */}
-            {opt && (
-              <section className="step" ref={step3} id="evaluate">
-                <span className={`step-marker ${marker(4)}`}>{stage >= 4 ? <Icon.check /> : "04"}</span>
-                <div className="panel">
+              {/* ---------- 4. Compare ---------- */}
+              {view === 3 && opt && (
+                <div className="panel" id="evaluate">
                   <div className="panel-head">
-                    <h3>Compare the answers</h3>
-                    <span className="hint">{confirmedIntent ? "Judged against your stated needs" : "Judged against your original request"}</span>
+                    <h3>{kind === "image" ? "See both images" : "Compare the answers"}</h3>
+                    <span className="hint">
+                      {kind === "image" ? "Free image generation by Pollinations.ai, no key needed" : confirmedIntent ? "Judged against your stated needs" : "Judged against your original request"}
+                    </span>
                   </div>
-                  {live ? (
+
+                  {kind === "image" ? (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                        <p style={{ color: "var(--text-2)", fontSize: 14, maxWidth: 540 }}>
+                          Both prompts are rendered with the same seed and shape ({sizeFor(shape).label}), so the difference comes from the prompt. Prompts are sent to Pollinations.ai.
+                          {!imageKey && !status?.imageKey && <> Without a key you get a few free, watermarked images; <button className="linklike" onClick={() => setShowSettings(true)}>add a free key</button> for more.</>}
+                        </p>
+                        <button className="btn primary" disabled={imgBusy !== null} onClick={renderImages}>
+                          {imgBusy ? <Spinner /> : <Icon.play />} {imgBusy ? `Rendering ${imgBusy === "a" ? "1" : "2"} of 2` : seed ? "New variation" : "Generate both images"}
+                        </button>
+                      </div>
+                      {seed > 0 && (
+                        <div className="img-grid" style={{ "--ar": `${sizeFor(shape).width} / ${sizeFor(shape).height}` } as React.CSSProperties}>
+                          {([["a", "Original prompt", prompt], ["b", "Optimized prompt", optText]] as const).map(([k, title, p]) => (
+                            <figure key={k} className="img-card">
+                              <div className={`img-frame ${images[k] ? "ready" : imgBusy === k ? "shimmer" : ""}`}>
+                                {images[k] ? <img src={images[k]} alt={`Image generated from the ${title.toLowerCase()}`} /> : <span className="img-wait">{imgBusy === k ? "Rendering…" : "Waiting"}</span>}
+                              </div>
+                              <figcaption>
+                                <b>{title}</b>
+                                <span>{p.length > 120 ? `${p.slice(0, 118)}…` : p}</span>
+                              </figcaption>
+                            </figure>
+                          ))}
+                        </div>
+                      )}
+                      {images.b && (
+                        <div className="actions end">
+                          <button className="btn primary" onClick={() => goView(4)}>See summary <Icon.arrow /></button>
+                        </div>
+                      )}
+                    </>
+                  ) : live ? (
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                       <p style={{ color: "var(--text-2)", fontSize: 14, maxWidth: 520 }}>
                         Runs both prompts on the same model, then one judge compares the two answers against {confirmedIntent ? "the needs you confirmed" : "what you originally asked"}, including how concise they are.
                       </p>
                       <button className="btn primary" disabled={running || !optText.trim()} onClick={runComparison}>
-                        {running ? <Spinner /> : <Icon.play />} {running ? "Generating and judging (4 steps)" : "Run both and compare"}
+                        {running ? <Spinner /> : <Icon.play />} {running ? "Generating and judging (4 steps)" : runs ? "Run again" : "Run both and compare"}
                       </button>
                     </div>
                   ) : (
@@ -630,54 +864,152 @@ export default function Home() {
                       <Icon.key />
                       <span>
                         Generating answers needs an LLM API key. Add a free Groq key with the <b>API key</b> button, or
-                        paste an answer you already have below to get the rule-based checks.
+                        paste an answer you already have below to get the rule-based checks. You can still see the summary.
                       </span>
                     </div>
                   )}
 
-                  {running && !runs && (
+                  {kind === "text" && running && !runs && (
                     <div className="eval-grid" style={{ marginTop: 24 }}>
                       <div className="shimmer" style={{ height: 220, borderRadius: 12, background: "var(--surface-2)" }} />
                       <div className="shimmer" style={{ height: 220, borderRadius: 12, background: "var(--surface-2)" }} />
                     </div>
                   )}
 
-                  {runs && (
-                    <div ref={compareRef} style={{ scrollMarginTop: 96 }}>
-                      <Comparison runs={runs} />
+                  {kind === "text" && runs && <Comparison runs={runs} />}
+
+                  {kind === "text" && (
+                    <>
+                      <details className="disclose">
+                        <summary><Icon.chevron /> Evaluate an answer you already have</summary>
+                        <div>
+                          <div className="editor-wrap">
+                            <textarea
+                              className="editor"
+                              style={{ minHeight: 120 }}
+                              placeholder="Paste a model's answer to check it against the optimized prompt"
+                              value={manualResponse}
+                              onChange={(e) => setManualResponse(e.target.value)}
+                            />
+                          </div>
+                          <button className="btn" style={{ marginTop: 12 }} disabled={!manualResponse.trim()} onClick={evaluateManual}>Evaluate answer</button>
+                          {manualEval && <div style={{ marginTop: 16 }}><EvalCard title="Your answer" result={manualEval} /></div>}
+                        </div>
+                      </details>
+                      <div className="actions end">
+                        <button className={`btn ${runs ? "primary" : ""}`} onClick={() => goView(4)}>See summary <Icon.arrow /></button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ---------- 5. Summary ---------- */}
+              {view === 4 && opt && analysis && (
+                <div className="panel summary" id="summary">
+                  <div className="panel-head">
+                    <h3>Your summary</h3>
+                    <span className="hint">Download it as a report with analytics and a technique guide</span>
+                  </div>
+                  <div className="kpis">
+                    <Kpi label="Prompt score" value={`${opt.before} → ${optLive?.score ?? opt.after}`} note={`+${(optLive?.score ?? opt.after) - opt.before} after rewrite`} tone="good" />
+                    {runs ? (
+                      <Kpi label="Answer score" value={`${runs.original.evaluation.judge?.overall} → ${runs.optimized.evaluation.judge?.overall}`} note={runs.winner === "optimized" ? "Judge preferred yours" : runs.winner === "tie" ? "No clear difference" : "Original preferred"} tone={runs.winner === "optimized" ? "good" : "warn"} />
+                    ) : kind === "image" && images.b ? (
+                      <Kpi label="Images" value="2 rendered" note={`Same seed ${seed}`} />
+                    ) : (
+                      <Kpi label="Answers" value="Not compared" note={kind === "image" ? "Generate both images" : live ? "Run the comparison" : "Needs an API key"} />
+                    )}
+                    {runs?.original.tokens && runs.optimized.tokens ? (
+                      <Kpi label="Output tokens" value={`${runs.original.tokens.completion} → ${runs.optimized.tokens.completion}`} note={`${Math.round((1 - runs.optimized.tokens.completion / runs.original.tokens.completion) * 100)}% change`} />
+                    ) : (
+                      <Kpi label="Prompt size" value={`~${estimateTokens(optText)} tokens`} note={`${optText.split(/\s+/).filter(Boolean).length} words`} />
+                    )}
+                    <Kpi label="Needs stated" value={String(confirmedIntent ? fields.filter((f) => confirmedIntent[f.key]?.trim()).length : 0)} note={confirmedIntent ? "Used as the target" : "Left open"} />
+                  </div>
+
+                  <div className="split" style={{ marginTop: 20 }}>
+                    <div className="pane">
+                      <div className="pane-head">Before <span className="tag">{opt.before}</span></div>
+                      <div className="pane-body">{prompt}</div>
+                    </div>
+                    <div className="pane">
+                      <div className="pane-head">
+                        After <span className="tag accent">{optLive?.score ?? opt.after}</span>
+                      </div>
+                      <div className="pane-body">{optText}</div>
+                    </div>
+                  </div>
+
+                  {kind === "image" && images.a && images.b && (
+                    <div className="img-grid small" style={{ "--ar": `${sizeFor(shape).width} / ${sizeFor(shape).height}` } as React.CSSProperties}>
+                      <figure className="img-card"><div className="img-frame ready"><img src={images.a} alt="Original prompt image" /></div><figcaption><b>Before</b></figcaption></figure>
+                      <figure className="img-card"><div className="img-frame ready"><img src={images.b} alt="Optimized prompt image" /></div><figcaption><b>After</b></figcaption></figure>
                     </div>
                   )}
 
-                  <details className="disclose">
-                    <summary><Icon.chevron /> Evaluate an answer you already have</summary>
-                    <div>
-                      <div className="editor-wrap">
-                        <textarea
-                          className="editor"
-                          style={{ minHeight: 120 }}
-                          placeholder="Paste a model's answer to check it against the optimized prompt"
-                          value={manualResponse}
-                          onChange={(e) => setManualResponse(e.target.value)}
-                        />
+                  {confirmedIntent && (
+                    <>
+                      <div className="subhead">What you asked for</div>
+                      <div className="chips">
+                        {fields.filter((f) => confirmedIntent[f.key]?.trim()).map((f) => (
+                          <span key={f.key} className="tag accent">{f.label}: {confirmedIntent[f.key]}</span>
+                        ))}
                       </div>
-                      <button className="btn" style={{ marginTop: 12 }} disabled={!manualResponse.trim()} onClick={evaluateManual}>Evaluate answer</button>
-                      {manualEval && <div style={{ marginTop: 16 }}><EvalCard title="Your answer" result={manualEval} /></div>}
-                    </div>
-                  </details>
-                </div>
-              </section>
-            )}
+                    </>
+                  )}
 
-            {warning && <div className="notice warn"><Icon.alert /><span>{warning}</span></div>}
-            {error && <div className="notice bad" role="alert"><Icon.alert /><span>{error}</span></div>}
+                  {opt.changes.length > 0 && (
+                    <>
+                      <div className="subhead">What changed</div>
+                      <ul className="changes">
+                        {opt.changes.map((c, i) => (
+                          <li key={i}><b>{c.technique}</b><span>{c.description}</span></li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+
+                  {learner && (
+                    <>
+                      <div className="subhead">What you learned</div>
+                      <div className="lesson-grid">
+                        {[...new Set([...opt.changes.map((c) => c.technique), ...analysis.issues.map((i) => i.technique)])]
+                          .map((t) => lessonFor(t))
+                          .filter((l): l is Lesson => Boolean(l))
+                          .slice(0, 6)
+                          .map((l) => (
+                            <div key={l.title} className="lesson-card"><b>{l.title}</b><p>{l.what}</p></div>
+                          ))}
+                      </div>
+                    </>
+                  )}
+
+                  {developer && <CodePanel kind={kind} prompt={optText} shape={shape} seed={seed || 42} model={status?.model} />}
+
+                  <div className="actions">
+                    <button className="btn primary" onClick={downloadReport}><Icon.arrow /> Download report</button>
+                    <button className="btn" onClick={openPrintable}>Open printable (save as PDF)</button>
+                    {developer && <button className="btn" onClick={downloadJson}>Export JSON</button>}
+                    <button className="btn" onClick={() => copyText(optText)}>{copied ? <Icon.check /> : <Icon.copy />} {copied ? "Copied" : "Copy prompt"}</button>
+                    <button className="btn ghost push" onClick={() => { setPrompt(""); setAnalysis(null); resetDownstream(); setIntent(EMPTY_INTENT); setIntentDone(null); goView(0); }}>
+                      <Icon.loop /> Start a new prompt
+                    </button>
+                  </div>
+                </div>
+              )}
+            </section>
           </div>
+
+          {warning && <div className="notice warn"><Icon.alert /><span>{warning}</span></div>}
+          {error && <div className="notice bad" role="alert"><Icon.alert /><span>{error}</span></div>}
         </main>
 
         <aside className="side">
           <div className="panel">
-            <div className="panel-head"><h3>Samples</h3></div>
+            <div className="panel-head"><h3>{kind === "image" ? "Image samples" : "Samples"}</h3></div>
             <ul className="list">
-              {SAMPLE_PROMPTS.map((s) => (
+              {samples.map((s) => (
                 <li key={s.title}>
                   <button onClick={() => loadPrompt(s.prompt)}>
                     <span className="t">{s.title}</span>
@@ -700,9 +1032,9 @@ export default function Home() {
               <ul className="list">
                 {history.map((h) => (
                   <li key={h.id}>
-                    <button onClick={() => { setPrompt(h.original); analyze(h.original); go(step1); }}>
+                    <button onClick={() => loadPrompt(h.original, h.kind ?? "text")}>
                       <span className="t">
-                        <span>{h.before} <span className="n">to</span> {h.after}</span>
+                        <span>{h.kind === "image" ? "Image · " : ""}{h.before} <span className="n">to</span> {h.after}</span>
                         {h.evalOptimized != null && <span className="n">judge {h.evalOriginal ?? "n/a"} / {h.evalOptimized}</span>}
                       </span>
                       <span className="s">{h.original}</span>
@@ -717,7 +1049,7 @@ export default function Home() {
 
       <footer>
         <span>PromptForge AI · Generative AI Capstone Project 2026</span>
-        <span>{status?.model ? `Model: ${status.model}` : ""}</span>
+        <span>{status?.model ? `Model: ${status.model}` : ""}{kind === "image" ? " · Images by Pollinations.ai" : ""}</span>
       </footer>
       </div>
 
@@ -725,25 +1057,96 @@ export default function Home() {
         <div className="modal-back" onClick={() => setShowSettings(false)}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => { if (e.key === "Escape") setShowSettings(false); }}>
-            <h2 id="settings-title">API key</h2>
+            <h2 id="settings-title">API keys</h2>
             <p>
               {status?.serverKey
                 ? `This deployment already has a key configured (model: ${status.model}). Add your own only if the shared one hits its rate limit.`
                 : "No server key is configured. A free Groq key enables AI critique, AI rewriting, answer generation and LLM-judge scoring."}
+              {" "}Image generation needs no key.
             </p>
             <label htmlFor="key">Your Groq API key</label>
             <input id="key" autoFocus className="field" type="password" placeholder="gsk_..." value={userKey} onChange={(e) => setUserKey(e.target.value)} />
             <p style={{ fontSize: 13, color: "var(--muted)" }}>
               Stored only in this browser. Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com/keys</a>.
             </p>
+            <label htmlFor="image-key">Your Pollinations key (images, optional)</label>
+            <input id="image-key" className="field" type="password" placeholder="pk_... or sk_..." value={imageKey} onChange={(e) => setImageKey(e.target.value)} />
+            <p style={{ fontSize: 13, color: "var(--muted)" }}>
+              {status?.imageKey ? "This deployment already has an image key. " : "Without a key you get a few free, watermarked images. "}
+              Free keys at <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noreferrer">enter.pollinations.ai</a>.
+            </p>
             <div className="modal-actions">
-              <button className="btn ghost" onClick={() => { setUserKey(""); save(KEY_STORE, ""); }}>Remove key</button>
-              <button className="btn primary" onClick={() => { save(KEY_STORE, userKey.trim()); setShowSettings(false); }}>Save</button>
+              <button className="btn ghost" onClick={() => { setUserKey(""); setImageKey(""); save(KEY_STORE, ""); save(IMAGE_KEY_STORE, ""); }}>Remove keys</button>
+              <button className="btn primary" onClick={() => { save(KEY_STORE, userKey.trim()); save(IMAGE_KEY_STORE, imageKey.trim()); setShowSettings(false); }}>Save</button>
             </div>
           </div>
         </div>
       )}
     </>
+  );
+}
+
+function TechniqueChips({ techniques, toggle, learner }: { techniques: TechniqueId[]; toggle: (id: TechniqueId) => void; learner?: boolean }) {
+  return (
+    <div className="chips" role="group" aria-label="Techniques">
+      {TECHNIQUES.map((t) => {
+        const on = techniques.includes(t.id);
+        return (
+          <button key={t.id} className={`chip ${on ? "on" : ""}`} aria-pressed={on} title={learner ? lessonFor(t.label === "Output format" ? "Output formatting" : t.label)?.why ?? t.description : t.description} onClick={() => toggle(t.id)}>
+            <span className="tick"><Icon.check size={10} /></span>
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function LessonBox({ lesson }: { lesson: Lesson }) {
+  return (
+    <details className="lesson-box">
+      <summary>Learn: {lesson.title}</summary>
+      <div>
+        <p>{lesson.what}</p>
+        <p className="why">Why it works: {lesson.why}</p>
+        <div className="ba">
+          <div><span>Before</span><code>{lesson.before}</code></div>
+          <div><span>After</span><code>{lesson.after}</code></div>
+        </div>
+      </div>
+    </details>
+  );
+}
+
+function CodePanel({ kind, prompt, shape, seed, model }: { kind: Kind; prompt: string; shape?: string; seed: number; model?: string }) {
+  const [lang, setLang] = useState<SnippetLang>("javascript");
+  const [done, setDone] = useState(false);
+  const code = kind === "image" ? imageSnippet(lang, prompt, shape, seed) : textSnippet(lang, prompt, model || undefined);
+  return (
+    <div className="code-panel">
+      <div className="code-head">
+        <div className="tabs" role="tablist">
+          {(["javascript", "python", "curl"] as const).map((l) => (
+            <button key={l} role="tab" aria-selected={lang === l} className={lang === l ? "on" : ""} onClick={() => setLang(l)}>{l === "javascript" ? "JavaScript" : l === "python" ? "Python" : "curl"}</button>
+          ))}
+        </div>
+        <span className="code-meta">~{estimateTokens(prompt)} prompt tokens{kind === "image" ? " · needs a free Pollinations key" : ""}</span>
+        <button className="btn sm" onClick={() => { navigator.clipboard.writeText(code).then(() => { setDone(true); setTimeout(() => setDone(false), 1500); }).catch(() => {}); }}>
+          {done ? <Icon.check /> : <Icon.copy />} {done ? "Copied" : "Copy code"}
+        </button>
+      </div>
+      <pre className="code">{code}</pre>
+    </div>
+  );
+}
+
+function Kpi({ label, value, note, tone }: { label: string; value: string; note: string; tone?: "good" | "warn" }) {
+  return (
+    <div className={`kpi ${tone ?? ""}`}>
+      <span className="label">{label}</span>
+      <b>{value}</b>
+      <span className="note">{note}</span>
+    </div>
   );
 }
 

@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { analyzePrompt } from "../../../lib/analyzer";
 import { optimizeOffline, TECHNIQUES, type TechniqueId, type OptimizeResult } from "../../../lib/optimizer";
 import { chat, getConfig, parseJson } from "../../../lib/llm";
-import { OPTIMIZER_SYSTEM, wrapPrompt } from "../../../lib/prompts";
+import { IMAGE_OPTIMIZER_SYSTEM, OPTIMIZER_SYSTEM, wrapPrompt } from "../../../lib/prompts";
+import { analyzeImagePrompt, optimizeImageOffline } from "../../../lib/image";
 import { handle, readIntent, readText, userKey } from "../../../lib/api";
 import { intentStatement } from "../../../lib/intent";
 
@@ -17,7 +18,9 @@ export const POST = handle(async (req) => {
     : TECHNIQUES.map((t) => t.id);
 
   const intent = readIntent(body.intent);
-  const before = analyzePrompt(prompt);
+  const image = body.kind === "image";
+  const scoreOf = (text: string) => (image ? analyzeImagePrompt(text) : analyzePrompt(text));
+  const before = scoreOf(prompt);
   if (before.injectionRisk) {
     return NextResponse.json({
       optimizedPrompt: prompt,
@@ -39,7 +42,7 @@ export const POST = handle(async (req) => {
       const r = await chat(
         cfg,
         [
-          { role: "system", content: OPTIMIZER_SYSTEM },
+          { role: "system", content: image ? IMAGE_OPTIMIZER_SYSTEM : OPTIMIZER_SYSTEM },
           {
             role: "user",
             content: `${wrapPrompt(prompt)}\n\n<confirmed_needs>\n${intent ? intentStatement("", intent).replace(/^\s*What I actually need:\n/, "") : "(none confirmed)"}\n</confirmed_needs>\n\nWeaknesses found:\n${issues.join("\n") || "- none"}\n\nTechniques to apply:\n${labels.join("\n")}`,
@@ -54,7 +57,7 @@ export const POST = handle(async (req) => {
       warning = `AI optimizer failed, used offline templates instead. ${e instanceof Error ? e.message : ""}`;
     }
   }
-  result ??= optimizeOffline(prompt, techniques, intent);
-  const after = analyzePrompt(result.optimizedPrompt);
+  result ??= image ? optimizeImageOffline(prompt, intent) : optimizeOffline(prompt, techniques, intent);
+  const after = scoreOf(result.optimizedPrompt);
   return NextResponse.json({ ...result, before: before.score, after: after.score, warning });
 });
