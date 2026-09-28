@@ -3,7 +3,7 @@ import { responseMetrics } from "../../../lib/metrics";
 import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { JUDGE_SYSTEM } from "../../../lib/prompts";
 import { toJudgeScore } from "../../../lib/judge";
-import { handle, readText, userKey } from "../../../lib/api";
+import { handle, limitOf, readText, userKey } from "../../../lib/api";
 
 export const maxDuration = 60;
 
@@ -16,6 +16,7 @@ export const POST = handle(async (req) => {
   const cfg = getConfig(userKey(req));
   let judge = null;
   let warning: string | undefined;
+  let limit: string | undefined;
   if (cfg) {
     try {
       const r = await chat(
@@ -30,8 +31,9 @@ export const POST = handle(async (req) => {
       judge = { ...toJudgeScore(j), improvements: j.improvements ?? [] };
     } catch (e) {
       warning = `AI judge unavailable: ${e instanceof Error ? e.message : e}`;
+      limit = limitOf(e);
     }
   }
-  return NextResponse.json({ metrics, judge, warning });
+  return NextResponse.json({ metrics, judge, warning, limit });
 });
 

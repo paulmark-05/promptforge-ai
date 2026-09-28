@@ -4,7 +4,7 @@ import { optimizeOffline, TECHNIQUES, type TechniqueId, type OptimizeResult } fr
 import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { IMAGE_OPTIMIZER_SYSTEM, OPTIMIZER_SYSTEM, wrapPrompt } from "../../../lib/prompts";
 import { analyzeImagePrompt, optimizeImageOffline } from "../../../lib/image";
-import { handle, readIntent, readText, userKey } from "../../../lib/api";
+import { handle, limitOf, readIntent, readText, userKey } from "../../../lib/api";
 import { intentStatement } from "../../../lib/intent";
 
 export const maxDuration = 60;
@@ -35,6 +35,7 @@ export const POST = handle(async (req) => {
   const cfg = getConfig(userKey(req));
   let result: OptimizeResult | null = null;
   let warning: string | undefined;
+  let limit: string | undefined;
   if (cfg && body.mode !== "offline") {
     try {
       const labels = TECHNIQUES.filter((t) => techniques.includes(t.id)).map((t) => `- ${t.label}: ${t.description}`);
@@ -55,9 +56,10 @@ export const POST = handle(async (req) => {
       result = { optimizedPrompt: j.optimized_prompt.trim(), changes: j.changes ?? [], rationale: j.rationale ?? "", mode: "llm" };
     } catch (e) {
       warning = `AI optimizer failed, used offline templates instead. ${e instanceof Error ? e.message : ""}`;
+      limit = limitOf(e);
     }
   }
   result ??= image ? optimizeImageOffline(prompt, intent) : optimizeOffline(prompt, techniques, intent);
   const after = scoreOf(result.optimizedPrompt);
-  return NextResponse.json({ ...result, before: before.score, after: after.score, warning });
+  return NextResponse.json({ ...result, before: before.score, after: after.score, warning, limit });
 });

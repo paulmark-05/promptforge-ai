@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasIntent, type Intent } from "./intent.ts";
+import { LlmError } from "./llm.ts";
 
 export const MAX_PROMPT_CHARS = 6000;
 
@@ -9,8 +10,14 @@ export function userKey(req: Request) {
   return req.headers.get("x-user-api-key");
 }
 
-export function bad(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+export function bad(message: string, status = 400, extra: Record<string, string> = {}) {
+  return NextResponse.json({ error: message, ...extra }, { status });
+}
+
+// For routes that fall back instead of failing: tells the client the text-AI
+// key ran out (or was rejected), so it can offer "Add your own key".
+export function limitOf(e: unknown): "text" | undefined {
+  return e instanceof LlmError && (e.code === "quota" || e.code === "auth") ? "text" : undefined;
 }
 
 export function readText(value: unknown, field: string, max = MAX_PROMPT_CHARS): string {
@@ -26,6 +33,7 @@ export function handle(fn: (req: Request) => Promise<Response>) {
     } catch (e) {
       if (e instanceof InputError) return bad(e.message);
       if (e instanceof SyntaxError) return bad("Request body must be valid JSON.");
+      if (e instanceof LlmError) return bad(e.message, e.status === 401 || e.status === 429 ? e.status : 502, { code: e.code, service: "text" });
       console.error(e);
       return bad(e instanceof Error ? e.message : "Unexpected error.", 502);
     }

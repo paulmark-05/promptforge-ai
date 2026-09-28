@@ -4,7 +4,7 @@ import { mergeOptions, presetOptions } from "../../../lib/intent";
 import { IMAGE_PRESETS } from "../../../lib/image";
 import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { IMAGE_INTENT_SYSTEM, INTENT_SYSTEM, wrapPrompt } from "../../../lib/prompts";
-import { handle, readText, userKey } from "../../../lib/api";
+import { handle, limitOf, readText, userKey } from "../../../lib/api";
 
 export const maxDuration = 60;
 
@@ -24,7 +24,7 @@ export const POST = handle(async (req) => {
       { role: "user", content: wrapPrompt(prompt) },
     ], { temperature: 0.3, json: true, maxTokens: 800 });
     return NextResponse.json({ options: mergeOptions(parseJson(r.text), presets, { openLength: !image }), mode: "llm" });
-  } catch {
-    return NextResponse.json({ options: presets, mode: "offline" });
+  } catch (e) {
+    return NextResponse.json({ options: presets, mode: "offline", limit: limitOf(e) });
   }
 });

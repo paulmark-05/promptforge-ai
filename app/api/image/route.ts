@@ -32,17 +32,18 @@ export const POST = handle(async (req) => {
     if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
   }
   if (!res) return bad("Could not reach the image service. Check your connection and try again.", 502);
-  if (res.status === 401) return bad("The Pollinations key was rejected. Check it in Settings.", 401);
+  if (res.status === 401) return bad("The Pollinations key was rejected. Check it in the Keys guide.", 401, { code: "auth", service: "image" });
   if (res.status === 402 || res.status === 429) {
     return bad(
       key
         ? "Your Pollinations key has run out of Pollen (its budget is used up). Raise the key's budget or claim more free Pollen from Quests at enter.pollinations.ai."
         : "The free no-key image allowance is used up for now. Add a free Pollinations key under Keys (see the guide) to keep generating.",
       402,
+      { code: "quota", service: "image" },
     );
   }
   const type = res.headers.get("content-type") || "";
-  if (res.status >= 500) return bad("The image service is busy right now. Press New variation to try again in a moment.", 503);
+  if (res.status >= 500) return bad("The image service is busy right now. Press New variation to try again in a moment.", 503, { code: "busy", service: "image" });
   if (!res.ok || !type.startsWith("image/")) return bad(`The image service returned an error (${res.status}).`, 502);
   return new NextResponse(await res.arrayBuffer(), {
     headers: { "Content-Type": type, "Cache-Control": "private, max-age=3600", "X-Image-Source": key ? "keyed" : "free", "X-Image-Model": key ? process.env.POLLINATIONS_MODEL || DEFAULT_IMAGE_MODEL : "legacy" },

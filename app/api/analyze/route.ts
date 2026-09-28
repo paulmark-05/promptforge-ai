@@ -3,7 +3,7 @@ import { analyzePrompt } from "../../../lib/analyzer";
 import { analyzeImagePrompt } from "../../../lib/image";
 import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { CRITIC_SYSTEM, wrapPrompt } from "../../../lib/prompts";
-import { handle, readText, userKey } from "../../../lib/api";
+import { handle, limitOf, readText, userKey } from "../../../lib/api";
 
 export const maxDuration = 60;
 
@@ -16,6 +16,7 @@ export const POST = handle(async (req) => {
   const cfg = getConfig(userKey(req));
   let critique = null;
   let warning: string | undefined;
+  let limit: string | undefined;
   // The AI critique is written for text prompts; image prompts use the image analyzer only.
   if (body.ai !== false && cfg && !image) {
     try {
@@ -30,7 +31,8 @@ export const POST = handle(async (req) => {
       critique = parseJson(r.text);
     } catch (e) {
       warning = `AI critique unavailable: ${e instanceof Error ? e.message : e}`;
+      limit = limitOf(e);
     }
   }
-  return NextResponse.json({ analysis, critique, warning });
+  return NextResponse.json({ analysis, critique, warning, limit });
 });

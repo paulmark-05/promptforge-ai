@@ -2,6 +2,20 @@
 // Defaults to Groq (free tier, fast) but works with OpenAI, OpenRouter, etc.
 // by changing LLM_BASE_URL and LLM_MODEL.
 
+// Why an LLM call failed. "quota" = the key's daily allowance is used up,
+// "rate" = per-minute limit, "auth" = key rejected.
+export type LlmErrorCode = "quota" | "rate" | "auth" | "network" | "upstream";
+
+export class LlmError extends Error {
+  code: LlmErrorCode;
+  status: number;
+  constructor(message: string, code: LlmErrorCode, status: number) {
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
 export interface LlmConfig {
   apiKey: string;
   baseUrl: string;
@@ -53,7 +67,7 @@ export async function chat(
       });
     } catch (e) {
       // Network drop or timeout: retry after a short pause, then give up with a clear message.
-      if (attempt >= (opts.retries ?? 1)) throw new Error("Could not reach the LLM service. Check your internet connection and try again.");
+      if (attempt >= (opts.retries ?? 1)) throw new LlmError("Could not reach the LLM service. Check your internet connection and try again.", "network", 502);
       await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
       continue;
     }
@@ -72,7 +86,8 @@ export async function chat(
             ? "This API key has used its daily free-tier allowance. It resets within 24 hours; you can also add a different key."
             : "Rate limit reached, try again in a minute."
           : "";
-    throw new Error(hint ? `${hint} (HTTP ${res.status})` : `LLM request failed (${res.status}). ${errText.slice(0, 200)}`.trim());
+    const code: LlmErrorCode = res.status === 401 ? "auth" : res.status === 429 ? (/per day/i.test(errText) ? "quota" : "rate") : "upstream";
+    throw new LlmError(hint ? `${hint} (HTTP ${res.status})` : `LLM request failed (${res.status}). ${errText.slice(0, 200)}`.trim(), code, res.status);
   }
   const data = await res.json();
   return {

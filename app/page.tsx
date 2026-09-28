@@ -30,6 +30,19 @@ const KEY_STORE = "pf_user_key";
 const HISTORY_STORE = "pf_history";
 const MODE_STORE = "pf_mode";
 const IMAGE_KEY_STORE = "pf_image_key";
+const SITE_OUT_STORE = "pf_site_out";
+type Service = "text" | "image";
+
+// An API error that says why it failed (for example "quota") and for which service.
+class ApiError extends Error {
+  code?: string;
+  service?: Service;
+  constructor(message: string, code?: string, service?: Service) {
+    super(message);
+    this.code = code;
+    this.service = service;
+  }
+}
 const DEFAULT_TECHNIQUES: TechniqueId[] = ["role", "context", "cot", "format", "constraints", "delimiters"];
 const CRITERIA_LABELS: Record<string, string> = {
   relevance: "Relevance",
@@ -76,6 +89,9 @@ export default function Home() {
   const [imageKey, setImageKey] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [keysTab, setKeysTab] = useState<"text" | "image">("text");
+  // Which shared site keys have run out this session, and the notice offering the guide.
+  const [siteOut, setSiteOut] = useState<Record<Service, boolean>>({ text: false, image: false });
+  const [limitNotice, setLimitNotice] = useState<{ service: Service; own: boolean; message: string } | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [audience, setAudience] = useState<Audience>("beginner");
   const [kind, setKind] = useState<Kind>("text");
@@ -141,6 +157,10 @@ export default function Home() {
   useEffect(() => {
     setUserKey(load(KEY_STORE, ""));
     setImageKey(load(IMAGE_KEY_STORE, ""));
+    try {
+      const out = JSON.parse(sessionStorage.getItem(SITE_OUT_STORE) || "null");
+      if (out) setSiteOut(out);
+    } catch {}
     setHistory(load(HISTORY_STORE, []));
     setAudience(load(MODE_STORE, "beginner"));
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => setStatus({ serverKey: false, model: "" }));
@@ -206,8 +226,41 @@ export default function Home() {
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
-    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    if (!res.ok) throw new ApiError(data.error || `Request failed (${res.status})`, data.code, data.service);
+    if (data.limit === "text" || data.limit === "image") noteLimit(data.limit);
     return data as T;
+  }
+
+  // A key ran out or was rejected. If it was the shared site key, mark it used up
+  // and offer the guide so the visitor can add their own free key.
+  function noteLimit(service: Service, message?: string, rejected = false) {
+    const own = Boolean(service === "text" ? userKey : imageKey);
+    if (!own) {
+      setSiteOut((o) => {
+        const next = { ...o, [service]: true };
+        try {
+          sessionStorage.setItem(SITE_OUT_STORE, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    }
+    setLimitNotice({
+      service,
+      own,
+      message: own
+        ? message || (service === "text" ? "Your Groq key has reached its limit for now." : "Your Pollinations key has run out of Pollen.")
+        : rejected
+          ? `The site's shared ${service === "text" ? "AI" : "image"} key isn't working right now. Add your own free ${service === "text" ? "Groq" : "Pollinations"} key to keep going.`
+          : service === "text"
+            ? "The site's shared AI key has used its free allowance for today. Add your own free Groq key to keep going; it takes about 2 minutes."
+            : "The site's shared image key has used up its Pollen. Add your own free Pollinations key to keep generating images.",
+    });
+  }
+
+  function fail(e: unknown) {
+    const err = e as ApiError;
+    if ((err.code === "quota" || err.code === "auth") && err.service) noteLimit(err.service, err.message, err.code === "auth");
+    else setError(err.message);
   }
 
   function goView(v: number, scroll = true) {
@@ -246,7 +299,7 @@ export default function Home() {
       }
       if (r.warning) setWarning(r.warning);
     } catch (e) {
-      setError((e as Error).message);
+      fail(e);
     } finally {
       setAnalyzing(false);
     }
@@ -264,7 +317,7 @@ export default function Home() {
       if (r.warning) setWarning(r.warning);
       pushHistory({ original: prompt, optimized: r.optimizedPrompt, before: r.before, after: r.after, kind });
     } catch (e) {
-      setError((e as Error).message);
+      fail(e);
     } finally {
       setOptimizing(false);
     }
@@ -298,7 +351,7 @@ export default function Home() {
         return next;
       });
     } catch (e) {
-      setError((e as Error).message);
+      fail(e);
     } finally {
       setRunning(false);
     }
@@ -312,7 +365,7 @@ export default function Home() {
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || `Image request failed (${res.status})`);
+      throw new ApiError(data.error || `Image request failed (${res.status})`, data.code, data.service ?? "image");
     }
     const blob = await res.blob();
     return await new Promise<string>((resolve, reject) => {
@@ -336,7 +389,7 @@ export default function Home() {
       const b = await fetchImage(optText, s);
       setImages({ a, b });
     } catch (e) {
-      setError((e as Error).message);
+      fail(e);
     } finally {
       setImgBusy(null);
     }
@@ -347,7 +400,7 @@ export default function Home() {
     try {
       setManualEval(await api<EvalResult>("/api/evaluate", { prompt: optText || prompt, response: manualResponse }));
     } catch (e) {
-      setError((e as Error).message);
+      fail(e);
     }
   }
 
@@ -1009,6 +1062,15 @@ export default function Home() {
 
           {warning && <div className="notice warn"><Icon.alert /><span>{warning}</span></div>}
           {error && <div className="notice bad" role="alert"><Icon.alert /><span>{error}</span></div>}
+          {limitNotice && (
+            <div className="notice limit" role="alert">
+              <Icon.key />
+              <span>{limitNotice.message}</span>
+              <button className="btn sm primary" onClick={() => openKeys(limitNotice.service)}>
+                {limitNotice.own ? "Open the keys guide" : "Add your own free key"}
+              </button>
+            </div>
+          )}
         </main>
 
         <aside className="side">
@@ -1016,14 +1078,14 @@ export default function Home() {
             <div className="panel-head"><h3>Your keys</h3></div>
             <ul className="key-status">
               <li>
-                <span className={`kdot ${status?.serverKey || userKey ? "on" : ""}`} />
+                <span className={`kdot ${userKey ? "on" : status?.serverKey ? (siteOut.text ? "warn" : "on") : ""}`} />
                 <span>Text AI</span>
-                <b>{status?.serverKey ? "Site key active" : userKey ? "Your key" : "Offline only"}</b>
+                <b className={!userKey && status?.serverKey && siteOut.text ? "out" : ""}>{userKey ? "Your key" : status?.serverKey ? (siteOut.text ? "Site key used up" : "Site key active") : "Offline only"}</b>
               </li>
               <li>
-                <span className={`kdot ${status?.imageKey || imageKey ? "on" : "warn"}`} />
+                <span className={`kdot ${imageKey ? "on" : status?.imageKey ? (siteOut.image ? "warn" : "on") : "warn"}`} />
                 <span>Images</span>
-                <b>{status?.imageKey ? "Site key active" : imageKey ? "Your key" : "Limited without key"}</b>
+                <b className={!imageKey && status?.imageKey && siteOut.image ? "out" : ""}>{imageKey ? "Your key" : status?.imageKey ? (siteOut.image ? "Site key used up" : "Site key active") : "Limited without key"}</b>
               </li>
             </ul>
             <button className="btn sm keys-cta" onClick={() => openKeys(status?.serverKey || userKey ? "image" : "text")}>
@@ -1127,7 +1189,12 @@ POLLINATIONS_API_KEY=sk_...  # Pollinations, images`}</pre>
 
             <div className="modal-actions">
               <button className="btn ghost" onClick={() => { setUserKey(""); setImageKey(""); save(KEY_STORE, ""); save(IMAGE_KEY_STORE, ""); }}>Remove my keys</button>
-              <button className="btn primary" onClick={() => { save(KEY_STORE, userKey.trim()); save(IMAGE_KEY_STORE, imageKey.trim()); setShowSettings(false); }}>Save</button>
+              <button className="btn primary" onClick={() => {
+                save(KEY_STORE, userKey.trim());
+                save(IMAGE_KEY_STORE, imageKey.trim());
+                if (limitNotice && (limitNotice.service === "text" ? userKey.trim() : imageKey.trim())) setLimitNotice(null);
+                setShowSettings(false);
+              }}>Save</button>
             </div>
           </div>
         </div>

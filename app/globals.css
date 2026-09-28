@@ -883,3 +883,34 @@ pre.code { margin: 0; padding: var(--s4); max-height: 320px; overflow: auto; fon
 .guide-steps li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--s3); }
 .guide-steps li > span { line-height: 1.5; }
 @media (max-width: 560px) { .guide-steps li { grid-template-columns: minmax(0, 1fr); } }
+
+/* Keys dialog: compact enough to fit one screen without scrolling */
+.keys-modal { width: min(640px, 100%); padding: var(--s5) var(--s6); max-height: calc(100svh - 24px); }
+.keys-modal h2 { font-size: 19px; }
+.keys-modal > p { font-size: 13px; margin-top: var(--s1); }
+.keys-tabs { margin-top: var(--s3); }
+.keys-tabs button { height: 32px; }
+.keys-guide { margin-top: var(--s3); }
+.keys-what { font-size: 13px !important; margin: 0; }
+.guide-steps { margin-top: var(--s3); gap: 6px; }
+.guide-steps li { padding: 8px 12px 8px 46px; font-size: 13px; min-height: 44px; }
+.guide-steps li::before { left: 12px; width: 24px; height: 24px; font-size: 11px; }
+.guide-steps .btn.sm { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.keys-modal label { margin-top: var(--s3); font-size: 13px; }
+.keys-modal input.field { height: 40px; margin-top: 6px; }
+.keys-note { margin-top: 6px !important; }
+.keys-owner { margin-top: var(--s2); }
+.keys-owner summary { font-size: 12.5px; }
+.keys-modal .modal-actions { margin-top: var(--s4); }
+@media (max-height: 760px) {
+  .keys-modal { padding: var(--s4) var(--s5); }
+  .guide-steps li { min-height: 40px; padding-top: 6px; padding-bottom: 6px; }
+}
+
+/* Key ran out: notice with the guide button */
+.notice.limit { background: var(--warn-soft); color: var(--text); align-items: center; }
+.notice.limit svg { color: var(--warn); flex: none; }
+.notice.limit span { flex: 1; color: var(--text-2); }
+.notice.limit .btn { flex: none; }
+.key-status b.out { color: var(--warn); }
+@media (max-width: 560px) { .notice.limit { flex-wrap: wrap; } }
