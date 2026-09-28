@@ -1105,3 +1105,6 @@ footer { max-width: 1600px; }
 /* Shorter step rows so the whole left rail fits a 768px-tall screen */
 .vsteps button { padding: 5px 10px; }
 .rail-left { gap: 14px; }
+footer .credit b { color: var(--text); font-weight: 600; }
+footer .credit a { color: #ffb27a; text-decoration: underline; text-decoration-color: var(--accent-line); text-underline-offset: 3px; }
+footer .credit a:hover { color: var(--accent); }

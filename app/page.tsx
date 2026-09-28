@@ -1224,6 +1224,10 @@ export default function Home() {
 
       <footer>
         <span>PromptForge AI · Generative AI Capstone Project 2026</span>
+        <span className="credit">
+          Made with care by <b>Nayani Paul</b> ·{" "}
+          <a href="https://nayani-paul-portfolio.vercel.app" target="_blank" rel="noopener noreferrer">Portfolio</a>
+        </span>
         <span>{status?.model ? `Model: ${status.model}` : ""}{kind === "image" ? " · Images by Pollinations.ai" : ""}</span>
       </footer>
       </div>

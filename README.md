@@ -4,9 +4,11 @@ An intelligent Generative AI platform that helps users **create, optimize and ev
 
 A vague prompt makes the model guess. PromptForge shows what your prompt leaves out, asks what you actually need (audience, purpose, length, format, tone), rewrites the prompt with proven techniques around those needs, then runs both versions and has a bias-corrected judge compare the answers against your stated needs.
 
-**Live demo:** _add your Vercel link here_
+**Live demo:** https://promptforge-ai-bay.vercel.app
 
 ![PromptForge home](docs/screenshots/01-home.png)
+
+![Workspace: steps and mode on the left, work in the middle, skills and samples on the right](docs/screenshots/02-workspace.png)
 
 ![Say what you need](docs/screenshots/10-needs.png)
 
@@ -14,27 +16,29 @@ A vague prompt makes the model guess. PromptForge shows what your prompt leaves 
 
 ## Features
 
-The workspace is a deck of five cards. Each finished step flips to the next, and you can flip back at any time.
+The workspace has three columns. The left one stays pinned and always shows the prompt type, the five steps (current one highlighted) and your mode. The middle is a deck of five cards: each finished step flips to the next, and you can flip back at any time. Samples, history and keys are on the right.
 
 | Card | What happens |
 |------|--------------|
 | 1. Check | Score any prompt 0–100 (8 dimensions for text, 8 visual elements for images) with a ranked list of what is missing. |
 | 2. Needs | Confirm who it is for, the purpose, length, format and tone (for images: use, style, shape, framing, mood, what to avoid), from suggested options or your own words. |
 | 3. Rewrite | The prompt is rewritten around your needs with proven techniques, with a before/after score and every change explained. |
-| 4. Compare | Text: both prompts run on the same model and a bias-corrected judge compares the answers against your needs, plus cost. Images: both prompts are rendered with the same seed side by side. |
-| 5. Summary | Before/after, needs, changes, results and efficiency, downloadable as a designed HTML report (save as PDF) or JSON. |
+| 4. Compare | Text: both prompts run on the same model and a bias-corrected judge compares the answers against your needs. Shown as charts: a before/after dumbbell for the six scoring criteria, paired bars for tokens, latency and length, and the rule checks side by side. Images: both prompts are rendered with the same seed, with an element chart and render times. |
+| 5. Summary | Prompt dimensions before/after, issues resolved, criteria and efficiency charts, downloadable as a designed HTML report with the same charts (save as PDF) or JSON. |
 
 **Three modes**
 
-- **New to prompting:** plain language, the top issues only, one "Improve my prompt" button.
-- **Learning:** a short lesson (what, why, before/after) for every issue and change, and a "What you learned" recap.
-- **Developer:** ready-to-paste code (JavaScript, Python, curl), token estimates and JSON export.
+- **New to prompting:** a one-line verdict in plain words, the top issues only, one "Improve my prompt" button.
+- **Learning:** a short lesson (what, why, before/after) for every issue and change, and a skills tracker; tap a technique to read its lesson and tick it off.
+- **Developer:** "Use this prompt in your own app" code panel (Node.js, Python, cURL with setup steps), token estimates, raw analysis JSON and JSON export.
 
 **Image prompts** are rendered by [Pollinations.ai](https://pollinations.ai). Without a key only a couple of images work. For regular use, create a **Personal Secret Key (`sk_…`)** at [enter.pollinations.ai](https://enter.pollinations.ai/keys), give it a small Pollen budget (free Pollen comes from Quests, no card needed), and set it as `POLLINATIONS_API_KEY` on the server.
 
 ![Image prompt compare: "a cat" vs the optimized watercolor prompt, same seed](docs/screenshots/14-image-compare.png)
 
-![Summary card](docs/screenshots/11-summary.png)
+![Summary analytics](docs/screenshots/11-summary-top.png)
+
+![Chart in the downloadable report](docs/screenshots/15-report-dimensions.png)
 
 ## Tech stack
 
@@ -128,3 +132,7 @@ scripts/benchmark.ts     evaluation script
 ## Security
 
 No API keys are stored in this repository. `.env.local` is git-ignored.
+
+---
+
+Made with care by **Nayani Paul** · [Portfolio](https://nayani-paul-portfolio.vercel.app)
