@@ -707,3 +707,29 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
 }
 /* Blend the bottom of the hero into the page so the grid never ends in a hard line */
 .hero3::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; z-index: 0; }
+
+/* ---------- Page background below the hero: dots with a hover glow ---------- */
+@property --pspot { syntax: "<length>"; inherits: true; initial-value: 0px; }
+.below { position: relative; --px: 50%; --py: 30%; --pspot: 0px; transition: --pspot 0.6s var(--ease); }
+.below.dots-on { --pspot: 220px; }
+.page-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.pdots, .pdots-lit { position: absolute; inset: 0; background-size: 28px 28px; }
+.pdots {
+  background-image: radial-gradient(circle, rgba(255, 150, 90, 0.26) 1px, transparent 1.7px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 240px, #000 calc(100% - 160px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 240px, #000 calc(100% - 160px), transparent 100%);
+}
+.pdots-lit {
+  background-image: radial-gradient(circle, #ffeadb 1.6px, transparent 2.4px);
+  filter: drop-shadow(0 0 4px rgba(255, 130, 60, 1)) drop-shadow(0 0 10px rgba(255, 107, 44, 0.6));
+  -webkit-mask-image: radial-gradient(circle var(--pspot) at var(--px) var(--py), #000 0%, rgba(0, 0, 0, 0.35) 55%, transparent 100%);
+  mask-image: radial-gradient(circle var(--pspot) at var(--px) var(--py), #000 0%, rgba(0, 0, 0, 0.35) 55%, transparent 100%);
+}
+.pglow { position: absolute; width: 760px; height: 760px; border-radius: 50%; animation: pglow-drift 16s ease-in-out infinite alternate; }
+.pglow.g1 { left: -380px; top: 6%; background: radial-gradient(closest-side, rgba(255, 107, 44, 0.14), transparent 70%); }
+.pglow.g2 { right: -380px; top: 42%; background: radial-gradient(closest-side, rgba(255, 140, 70, 0.12), transparent 70%); animation-delay: -6s; }
+.pglow.g3 { left: 20%; bottom: -420px; background: radial-gradient(closest-side, rgba(255, 107, 44, 0.1), transparent 70%); animation-delay: -11s; }
+@keyframes pglow-drift { from { transform: translate(0, 0); } to { transform: translate(60px, -40px); } }
+.below > .workspace, .below > footer { position: relative; z-index: 1; }
+@media (hover: none) { .pdots-lit { display: none; } }
+@media (prefers-reduced-motion: reduce) { .pglow { animation: none; } }

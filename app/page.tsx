@@ -78,6 +78,24 @@ export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
+  const belowRef = useRef<HTMLDivElement>(null);
+  const dotsIdle = useRef(0);
+
+  // Page background below the hero: dots near the pointer light up, like the hero sky.
+  function dotsMove(e: React.PointerEvent<HTMLDivElement>) {
+    const el = belowRef.current;
+    if (!el || e.pointerType !== "mouse") return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--px", `${Math.round(e.clientX - r.left)}px`);
+    el.style.setProperty("--py", `${Math.round(e.clientY - r.top)}px`);
+    el.classList.add("dots-on");
+    window.clearTimeout(dotsIdle.current);
+    dotsIdle.current = window.setTimeout(() => el.classList.remove("dots-on"), 1800);
+  }
+  function dotsLeave() {
+    window.clearTimeout(dotsIdle.current);
+    belowRef.current?.classList.remove("dots-on");
+  }
   const step1 = useRef<HTMLElement>(null);
   const stepNeeds = useRef<HTMLElement>(null);
   const step2 = useRef<HTMLElement>(null);
@@ -339,6 +357,14 @@ export default function Home() {
 
       <Hero onCheck={loadPrompt} onOpen={openFromHero} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
 
+      <div className="below" ref={belowRef} onPointerMove={dotsMove} onPointerLeave={dotsLeave}>
+      <div className="page-bg" aria-hidden>
+        <div className="pdots" />
+        <div className="pdots-lit" />
+        <div className="pglow g1" />
+        <div className="pglow g2" />
+        <div className="pglow g3" />
+      </div>
       <div className="workspace">
         <main>
           <div className="flow">
@@ -693,6 +719,7 @@ export default function Home() {
         <span>PromptForge AI · Generative AI Capstone Project 2026</span>
         <span>{status?.model ? `Model: ${status.model}` : ""}</span>
       </footer>
+      </div>
 
       {showSettings && (
         <div className="modal-back" onClick={() => setShowSettings(false)}>
