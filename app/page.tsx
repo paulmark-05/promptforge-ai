@@ -1235,8 +1235,9 @@ export default function Home() {
             <ul>
               {STEPS.map((st, i) => (
                 <li key={st}>
-                  <button disabled={!reachable[i]} onClick={() => goView(i)}>
+                  <button onClick={() => (reachable[i] ? goView(i) : goView(0))} title={reachable[i] ? `Go to ${st}` : "Start with Check"}>
                     <span className="sf-n">{String(i + 1).padStart(2, "0")}</span>{st}
+                    <small>{STEP_HINTS[i]}</small>
                   </button>
                 </li>
               ))}
@@ -1254,7 +1255,6 @@ export default function Home() {
           </nav>
 
           <a className="sf-author" href="https://nayani-paul-portfolio.vercel.app" target="_blank" rel="noopener noreferrer">
-            <span className="sf-avatar" aria-hidden>NP</span>
             <span className="sf-author-text">
               <small>Designed and built by</small>
               <b>Nayani Paul</b>

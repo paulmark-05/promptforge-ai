@@ -1146,3 +1146,6 @@ footer .credit a:hover { color: var(--accent); }
   .sf-bottom { flex-direction: column; gap: 6px; }
 }
 .sf-author, .sf-author:hover, .sf-author * { text-decoration: none !important; }
+.sf-author { grid-template-columns: minmax(0, 1fr); }
+.sf-col small { color: var(--muted); font-size: 12px; margin-left: 2px; }
+.sf-col small::before { content: "· "; }
