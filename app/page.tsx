@@ -10,7 +10,7 @@ import { Hero, type HeroDemo } from "../components/Hero";
 import { EMPTY_INTENT, INTENT_FIELDS, hasIntent, intentStatement, type Intent, type IntentOptions } from "../lib/intent";
 import { combineVerdicts, type PairwiseResult } from "../lib/judge";
 import { IMAGE_INTENT_FIELDS, analyzeImagePrompt, sizeFor, type ImageAnalysis } from "../lib/image";
-import { LESSONS, lessonFor, type Lesson } from "../lib/lessons";
+import { IMAGE_LESSONS, LESSONS, TEXT_LESSONS, lessonFor, type Lesson } from "../lib/lessons";
 import { estimateTokens, imageSnippet, textSnippet, type SnippetLang } from "../lib/snippets";
 import { buildReportHtml, reportFileName, type ReportData } from "../lib/report";
 import { Dumbbell, PairBars, SERIES, type DumbbellRow } from "../components/charts";
@@ -54,12 +54,13 @@ const CRITERIA_LABELS: Record<string, string> = {
   instruction_following: "Instruction following",
 };
 const AUDIENCES: { id: Audience; label: string; blurb: string; gives: string[] }[] = [
-  { id: "beginner", label: "New to prompting", blurb: "Plain words, no jargon", gives: ["A one-line verdict in plain words", "Only the top fixes, explained simply", "One button to get a better prompt"] },
-  { id: "learner", label: "Learning", blurb: "Lessons and a skills tracker", gives: ["A short lesson on every issue and change", "Before and after examples for each technique", "A tracker of the skills you have studied"] },
-  { id: "developer", label: "Developer", blurb: "Code, tokens and raw data", gives: ["Ready-to-run Node.js, Python and cURL", "Token estimates and latency numbers", "Raw analysis JSON and a JSON export"] },
+  { id: "beginner", label: "New to prompting", blurb: "Plain words, no jargon", gives: ["A verdict in plain words", "Only the top fixes", "One button to improve"] },
+  { id: "learner", label: "Learning", blurb: "Lessons and a skills tracker", gives: ["A lesson on every issue", "Before and after examples", "A skills tracker"] },
+  { id: "developer", label: "Developer", blurb: "Code, tokens and raw data", gives: ["Node.js, Python, cURL code", "Token and latency numbers", "Raw JSON view and export"] },
 ];
 const SKILLS_STORE = "pf_skills";
 const STEPS = ["Check", "Needs", "Rewrite", "Compare", "Summary"];
+const STEP_HINTS = ["Score the prompt", "Say what you need", "Improve it", "Run both, judge", "Charts and report"];
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -97,6 +98,7 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [audience, setAudience] = useState<Audience>("beginner");
   const [skills, setSkills] = useState<string[]>([]);
+  const [lessonOpen, setLessonOpen] = useState<Lesson | null>(null);
   const [kind, setKind] = useState<Kind>("text");
 
   const [prompt, setPrompt] = useState("");
@@ -138,7 +140,7 @@ export default function Home() {
   const [scrolled, setScrolled] = useState(false);
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement>(null);
-  const deckRef = useRef<HTMLOListElement>(null);
+  const deckRef = useRef<HTMLElement>(null);
   const belowRef = useRef<HTMLDivElement>(null);
   const dotsIdle = useRef(0);
 
@@ -530,7 +532,13 @@ export default function Home() {
       prompt,
       analysis: analysis!,
       needs,
-      optimized: opt ? { prompt: optText, before: opt.before, after: optLive?.score ?? opt.after, changes: opt.changes, rationale: opt.rationale, mode: opt.mode } : undefined,
+      optimized: opt
+        ? {
+            prompt: optText, before: opt.before, after: optLive?.score ?? opt.after, changes: opt.changes, rationale: opt.rationale, mode: opt.mode,
+            dimensions: optLive?.dimensions.map((x) => ({ key: x.key, score: x.score })),
+            issuesLeft: optLive?.issues.map((i) => i.technique),
+          }
+        : undefined,
       comparison: runs
         ? { winner: runs.winner, reason: runs.reason, consistent: runs.consistent, judgedAgainst: runs.intentUsed ? "your stated needs" : "your original request", original: side(runs.original), optimized: side(runs.optimized) }
         : undefined,
@@ -593,38 +601,48 @@ export default function Home() {
         <div className="pglow g3" />
       </div>
       <div className="workspace">
-        <main>
-          <div className="deck-head">
-            <div className="modes" role="radiogroup" aria-label="Who is this for">
-              {AUDIENCES.map((a) => (
-                <button key={a.id} role="radio" aria-checked={audience === a.id} className={`mode ${audience === a.id ? "on" : ""}`} onClick={() => chooseAudience(a.id)} title={a.blurb}>
-                  <b>{a.label}</b>
-                  <span>{a.blurb}</span>
-                </button>
-              ))}
-            </div>
+        <nav className="rail-left" aria-label="Mode and steps">
+          <div className="rail-block">
+            <span className="rail-label">Prompt type</span>
             <div className="kind" role="radiogroup" aria-label="Prompt type">
               {(["text", "image"] as const).map((k) => (
                 <button key={k} role="radio" aria-checked={kind === k} className={kind === k ? "on" : ""} onClick={() => switchKind(k)}>
-                  {k === "text" ? "Text prompt" : "Image prompt"}
+                  {k === "text" ? "Text" : "Image"}
                 </button>
               ))}
             </div>
           </div>
 
-          <ModeBrief audience={audience} skills={skills} onReset={() => { setSkills([]); save(SKILLS_STORE, []); }} />
+          <div className="rail-block">
+            <span className="rail-label">Steps</span>
+            <ol className="vsteps">
+              {STEPS.map((st, i) => (
+                <li key={st} className={`${view === i ? "current" : ""} ${done[i] ? "done" : ""}`}>
+                  <button disabled={!reachable[i]} onClick={() => goView(i)} aria-current={view === i ? "step" : undefined}>
+                    <span className="n">{done[i] && view !== i ? <Icon.check size={12} /> : i + 1}</span>
+                    <span className="vs-text"><b>{st}</b><small>{STEP_HINTS[i]}</small></span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          </div>
 
-          <ol className="stepper" ref={deckRef}>
-            {STEPS.map((s, i) => (
-              <li key={s} className={`${view === i ? "current" : ""} ${done[i] ? "done" : ""}`}>
-                <button disabled={!reachable[i]} onClick={() => goView(i)}>
-                  <span className="n">{done[i] && view !== i ? <Icon.check size={12} /> : String(i + 1).padStart(2, "0")}</span>
-                  {s}
+          <div className="rail-block">
+            <span className="rail-label">Who is this for</span>
+            <div className="modes" role="radiogroup" aria-label="Who is this for">
+              {AUDIENCES.map((a) => (
+                <button key={a.id} role="radio" aria-checked={audience === a.id} className={`mode ${audience === a.id ? "on" : ""}`} onClick={() => chooseAudience(a.id)}>
+                  <b>{a.label}</b>
+                  <span>{a.blurb}</span>
+                  {audience === a.id && <ul className="mode-gives">{a.gives.map((g) => <li key={g}><Icon.check size={11} />{g}</li>)}</ul>}
                 </button>
-              </li>
-            ))}
-          </ol>
+              ))}
+            </div>
+          </div>
 
+        </nav>
+
+        <main ref={deckRef}>
           <div className="deck">
             <section key={`${view}-${kind}`} className={`flipcard ${dir > 0 ? "fwd" : "back"}`} aria-live="polite">
               {/* ---------- 1. Check ---------- */}
@@ -1120,6 +1138,14 @@ export default function Home() {
         </main>
 
         <aside className="side">
+          {learner && (
+            <SkillsTracker
+              kind={kind}
+              skills={skills}
+              onOpen={(l) => { setLessonOpen(l); learned(l.title); }}
+              onReset={() => { setSkills([]); save(SKILLS_STORE, []); }}
+            />
+          )}
           <div className="panel keys-panel">
             <div className="panel-head"><h3>Your keys</h3></div>
             <ul className="key-status">
@@ -1178,6 +1204,23 @@ export default function Home() {
           </div>
         </aside>
       </div>
+
+      {lessonOpen && (
+        <div className="modal-back" onClick={() => setLessonOpen(null)}>
+          <div className="modal lesson-modal" role="dialog" aria-modal="true" aria-label={lessonOpen.title} onClick={(e) => e.stopPropagation()}>
+            <div className="panel-head">
+              <h3>{lessonOpen.title}</h3>
+              <button className="btn ghost sm" onClick={() => setLessonOpen(null)}>Close</button>
+            </div>
+            <p>{lessonOpen.what}</p>
+            <p className="why">Why it works: {lessonOpen.why}</p>
+            <div className="ba">
+              <div><span>Before</span><code>{lessonOpen.before}</code></div>
+              <div><span>After</span><code>{lessonOpen.after}</code></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer>
         <span>PromptForge AI · Generative AI Capstone Project 2026</span>
@@ -1333,30 +1376,32 @@ function CodePanel({ kind, prompt, shape, seed, model }: { kind: Kind; prompt: s
   );
 }
 
-// Mode strip: what the chosen mode gives you, plus the learner's skills tracker.
-function ModeBrief({ audience, skills, onReset }: { audience: Audience; skills: string[]; onReset: () => void }) {
-  const mode = AUDIENCES.find((a) => a.id === audience)!;
-  const all = Object.values(LESSONS).map((l) => l.title);
-  const known = all.filter((t) => skills.includes(t));
+// Learner mode: the techniques for this prompt type, ticked off as lessons are opened.
+function SkillsTracker({ kind, skills, onOpen, onReset }: { kind: Kind; skills: string[]; onOpen: (l: Lesson) => void; onReset: () => void }) {
+  const list = (kind === "image" ? IMAGE_LESSONS : TEXT_LESSONS).map((k) => LESSONS[k]);
+  const known = list.filter((l) => skills.includes(l.title)).length;
   return (
-    <div key={audience} className={`mode-brief ${audience}`}>
-      <div className="mb-gives">
-        <span className="mb-label">{mode.label} mode gives you</span>
-        <ul>{mode.gives.map((g) => <li key={g}><Icon.check size={12} />{g}</li>)}</ul>
+    <div className="rail-block skills">
+      <div className="skills-head">
+        <span className="rail-label">{kind === "image" ? "Image skills" : "Prompt skills"}</span>
+        <b>{known} / {list.length}</b>
       </div>
-      {audience === "learner" && (
-        <div className="mb-skills">
-          <div className="mb-skills-head">
-            <span className="mb-label">Skills studied</span>
-            <b>{known.length} / {all.length}</b>
-            {known.length > 0 && <button className="link-btn" onClick={onReset}>Reset</button>}
-          </div>
-          <div className="mb-meter" aria-hidden><span style={{ width: `${(known.length / all.length) * 100}%` }} /></div>
-          <div className="mb-chips">
-            {all.map((t) => <span key={t} className={skills.includes(t) ? "on" : ""}>{skills.includes(t) ? "✓ " : ""}{t}</span>)}
-          </div>
-        </div>
-      )}
+      <div className="mb-meter" aria-hidden><span style={{ width: `${(known / list.length) * 100}%` }} /></div>
+      <p className="skills-help">The techniques good prompts use. Tap one for a 30-second lesson; it is ticked once you have read it.</p>
+      <ul className="skill-list">
+        {list.map((l) => {
+          const on = skills.includes(l.title);
+          return (
+            <li key={l.title}>
+              <button className={on ? "on" : ""} onClick={() => onOpen(l)}>
+                <span className="tick">{on ? <Icon.check size={11} /> : null}</span>
+                {l.title}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {known > 0 && <button className="link-btn" onClick={onReset}>Reset progress</button>}
     </div>
   );
 }

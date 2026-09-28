@@ -133,6 +133,9 @@ export const LESSONS: Record<string, Lesson> = {
 };
 
 // Map an issue's technique label (from the analyzers) to a lesson key.
+export const TEXT_LESSONS = ["clarity", "specificity", "context", "role", "format", "constraints", "examples", "structure", "cot"];
+export const IMAGE_LESSONS = ["subject", "style", "composition", "lighting", "color", "detail", "aspect", "negative"];
+
 const TECHNIQUE_TO_LESSON: Record<string, string> = {
   "Clear instruction": "clarity",
   Specificity: "specificity",

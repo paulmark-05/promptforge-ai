@@ -1033,3 +1033,75 @@ pre.code { margin: 0; padding: var(--s4); max-height: 320px; overflow: auto; fon
 .json-view summary { cursor: pointer; padding: var(--s2) var(--s3); font: 600 12px var(--mono); color: var(--text-2); display: flex; gap: var(--s2); }
 .json-view summary span { color: var(--muted); font-weight: 500; margin-left: auto; }
 .json-view pre.code { border-top: 1px solid var(--border); max-height: 280px; }
+
+/* ---------- Three-column workspace: controls | work | samples ---------- */
+.workspace { max-width: 1600px; grid-template-columns: 250px minmax(0, 1fr) 280px; gap: var(--s5); padding: var(--s7) var(--s5) var(--s9); }
+.workspace > main { min-width: 0; scroll-margin-top: 84px; }
+footer { max-width: 1600px; }
+.rail-left { position: sticky; top: 84px; max-height: calc(100vh - 100px); overflow-y: auto; display: grid; gap: var(--s4); align-content: start; padding-right: 4px; scrollbar-width: thin; }
+.rail-block { display: grid; gap: var(--s2); }
+.rail-label { font: 500 10.5px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.rail-left .kind { display: grid; grid-template-columns: 1fr 1fr; align-self: stretch; }
+.rail-left .kind button { height: 34px; padding: 0; }
+
+.vsteps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; position: relative; }
+.vsteps::before { content: ""; position: absolute; left: 21px; top: 18px; bottom: 18px; width: 1px; background: var(--border); }
+.vsteps li { position: relative; }
+.vsteps button { width: 100%; display: flex; align-items: center; gap: var(--s3); padding: 7px 10px; border-radius: 12px; border: 1px solid transparent; background: transparent; color: var(--muted); text-align: left; cursor: pointer; transition: background 0.2s, border-color 0.2s, transform 0.2s var(--ease); }
+.vsteps .n { position: relative; z-index: 1; flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--surface-3); color: var(--text-2); font: 600 11px var(--mono); box-shadow: 0 0 0 3px var(--bg); }
+.vs-text { display: grid; line-height: 1.25; }
+.vs-text b { font-size: 13.5px; font-weight: 600; color: inherit; }
+.vs-text small { font-size: 11.5px; color: var(--muted); }
+.vsteps li.done button { color: var(--text); }
+.vsteps li.done .n { background: var(--good-soft); color: var(--good); }
+.vsteps li.current button { color: var(--text); background: var(--accent-soft); border-color: var(--accent-line); box-shadow: 0 0 22px -8px rgba(255, 107, 44, 0.7); }
+.vsteps li.current .n { background: var(--accent); color: var(--accent-ink); }
+.vsteps button:disabled { cursor: default; opacity: 0.45; }
+.vsteps button:not(:disabled):hover { transform: translateX(2px); border-color: var(--border-strong); }
+
+.rail-left .modes { grid-template-columns: minmax(0, 1fr); gap: 6px; flex: none; }
+.rail-left .mode { padding: 10px 12px; }
+.rail-left .mode:hover { transform: translateX(2px); }
+.mode-gives { list-style: none; margin: 8px 0 0; padding: 8px 0 0; border-top: 1px solid var(--accent-line); display: grid; gap: 4px; animation: rise 0.3s var(--ease) both; }
+.mode-gives li { display: flex; gap: 6px; align-items: baseline; font-size: 12px; color: var(--text-2); }
+.mode-gives svg { flex: none; color: var(--accent); transform: translateY(1px); }
+
+.skills { padding: var(--s3); border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); }
+.skills-head { display: flex; align-items: baseline; justify-content: space-between; }
+.skills-head b { font: 600 13px var(--mono); color: var(--text); }
+.skills-help { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+.skill-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.skill-list button { width: 100%; display: flex; align-items: center; gap: 8px; padding: 5px 6px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2); font: 500 12.5px var(--sans); text-align: left; cursor: pointer; }
+.skill-list button:hover { background: var(--surface-2); color: var(--text); }
+.skill-list .tick { flex: none; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--border-strong); }
+.skill-list button.on { color: var(--text); }
+.skill-list button.on .tick { background: var(--good-soft); border-color: transparent; color: var(--good); }
+.skills .link-btn { margin: 0; justify-self: start; }
+.lesson-modal { width: min(560px, 100%); }
+.lesson-modal p { font-size: 14px; color: var(--text-2); margin-top: var(--s2); }
+.lesson-modal .why { color: var(--muted); }
+.lesson-modal .ba { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s3); margin-top: var(--s4); }
+.lesson-modal .ba span { display: block; font: 500 10px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.lesson-modal code { display: block; padding: var(--s3); border-radius: var(--radius-sm); background: var(--bg); border: 1px solid var(--border); font: 12px/1.5 var(--mono); color: var(--text); white-space: pre-wrap; }
+
+@media (max-width: 1280px) {
+  .workspace { grid-template-columns: 230px minmax(0, 1fr); }
+  .workspace > .side { grid-column: 1 / -1; position: static; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 860px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .rail-left { position: static; max-height: none; overflow: visible; }
+  .vsteps { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .vsteps::before, .vs-text small { display: none; }
+  .vsteps button { flex-direction: column; gap: 4px; padding: 6px 2px; text-align: center; }
+  .vs-text b { font-size: 11.5px; }
+  .workspace > .side { grid-template-columns: minmax(0, 1fr); }
+  .lesson-modal .ba { grid-template-columns: minmax(0, 1fr); }
+}
+.side .skills { padding: var(--s4); border-radius: var(--radius-lg); }
+.mode-gives li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Phones: the 3D stack has no room; the numbered steps above carry the story. */
+@media (max-width: 640px) { .hero3 .stage { display: none; } .hero3 { overflow: hidden; } }
+/* Shorter step rows so the whole left rail fits a 768px-tall screen */
+.vsteps button { padding: 5px 10px; }
+.rail-left { gap: 14px; }
