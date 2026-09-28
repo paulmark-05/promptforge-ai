@@ -51,22 +51,6 @@ p { margin: 0; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 ::selection { background: var(--accent); color: var(--accent-ink); }
 
-/* ---------- Page backdrop: a warm glow in one corner and a faint grid ---------- */
-.backdrop { position: absolute; inset: 0 0 auto 0; height: 900px; pointer-events: none; overflow: hidden; z-index: 0; }
-.backdrop::before {
-  content: ""; position: absolute; top: -320px; right: -260px; width: 820px; height: 820px; border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 107, 44, 0.34), rgba(255, 107, 44, 0.08) 55%, transparent 72%);
-  animation: glow 9s ease-in-out infinite alternate;
-}
-.backdrop::after {
-  content: ""; position: absolute; inset: 0;
-  background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
-  background-size: 64px 64px;
-  opacity: 0.35;
-  mask-image: radial-gradient(ellipse at 50% 30%, #000 20%, transparent 70%);
-}
-@keyframes glow { from { transform: translate(0, 0) scale(1); } to { transform: translate(-40px, 30px) scale(1.08); } }
-
 /* ---------- Navigation ---------- */
 .nav {
   position: sticky; top: 0; z-index: 20;
@@ -391,22 +375,15 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
 .hero3 { position: relative; z-index: 1; height: calc(100svh - 64px); min-height: 600px; max-height: 1000px; overflow: hidden; }
 .hero3-bg { position: absolute; inset: 0; pointer-events: none; }
 .floor {
-  position: absolute; left: -30%; right: -30%; bottom: -2px; height: 30%;
-  background-image: linear-gradient(rgba(255, 107, 44, 0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 107, 44, 0.42) 1px, transparent 1px);
-  background-size: 84px 84px;
-  transform: perspective(520px) rotateX(64deg); transform-origin: 50% 100%;
-  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.95) 5%, transparent 85%);
-  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.95) 5%, transparent 85%);
-  filter: drop-shadow(0 0 3px rgba(255, 107, 44, 0.7));
-  animation: floor-move 2.2s linear infinite;
+  position: absolute; left: -60%; right: -60%; top: -30%; bottom: 0;
+  background-image: linear-gradient(rgba(255, 107, 44, 0.34) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 107, 44, 0.3) 1px, transparent 1px);
+  background-size: 72px 72px;
+  transform: perspective(700px) rotateX(58deg); transform-origin: 50% 100%;
+  -webkit-mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 92%);
+  mask-image: linear-gradient(to top, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 92%);
+  animation: floor-move 2.6s linear infinite;
 }
-@keyframes floor-move { from { background-position: 0 0; } to { background-position: 0 84px; } }
-.horizon {
-  position: absolute; left: 0; right: 0; bottom: 30%; height: 2px;
-  background: linear-gradient(90deg, transparent, #ff7a36 25%, #ffe1cc 50%, #ff7a36 75%, transparent);
-  box-shadow: 0 0 22px 6px rgba(255, 107, 44, 0.45), 0 0 80px 20px rgba(255, 107, 44, 0.18);
-  animation: pulseGlow 4s ease-in-out infinite;
-}
+@keyframes floor-move { from { background-position: 0 0; } to { background-position: 0 72px; } }
 
 .hero3-grid {
   position: relative; z-index: 1; height: 100%; max-width: 1280px; margin: 0 auto;
@@ -543,8 +520,6 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
   .hero3-copy { order: -1; max-width: none; }
   .stage { height: 440px; }
   .stack { height: 400px; }
-  .floor { height: 30%; }
-  .horizon { bottom: 30%; }
 }
 @media (max-width: 560px) {
   .how3 { grid-template-columns: minmax(0, 1fr); }
@@ -556,60 +531,41 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
   .nbeam { display: none; }
 }
 
-/* ---------- Hero stack: interactions ---------- */
-.tilt {
-  transform-style: preserve-3d;
-  transform: rotateY(var(--ry, 0deg)) rotateX(var(--rx, 0deg));
-  transition: transform 0.35s var(--ease);
-}
+/* ---------- Hero stack: hover and click ---------- */
+.tilt { transform-style: preserve-3d; transform: rotateY(var(--ry, 0deg)) rotateX(var(--rx, 0deg)); transition: transform 0.4s var(--ease); }
 .stage.hovering .stack { animation-play-state: paused; }
-.card3 { cursor: pointer; }
-.card3:not(.active):hover { opacity: 0.92; }
-.card3-head { display: flex; align-items: center; gap: 10px; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; text-align: left; }
-.card3-head:focus-visible { outline-offset: 4px; }
-
-button.c-pill { font: 500 12px var(--sans); cursor: pointer; background: transparent; transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.15s var(--ease); }
-button.c-pill.guess:hover { border-style: solid; border-color: var(--accent-line); background: rgba(255, 107, 44, 0.1); color: var(--text); animation-play-state: paused; }
-button.c-pill.guess:active { transform: scale(0.95); }
-.c-pill .plus { color: var(--accent); font-weight: 700; }
-button.c-pill.guess.done { animation: none; border: 1px solid transparent; background: rgba(255, 255, 255, 0.04); color: var(--muted); text-decoration: line-through; cursor: default; }
-
-.needs-row { min-height: 60px; align-content: flex-start; }
-.c-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
-.c-pill.need { opacity: 1; animation: pop 0.5s var(--ease) both; }
-
-/* Card 3 only glows once the needs are known */
-.lines.short i { background: rgba(255, 255, 255, 0.13); box-shadow: none; transition: background 0.5s, box-shadow 0.5s; }
-.card3.ready .lines.short i { background: linear-gradient(90deg, #ff7a36, #ffc195); box-shadow: 0 0 10px rgba(255, 120, 50, 0.6); }
-.card3.active .lines.long i, .card3.active .lines.short i { animation: none; }
-.card3.active.ready .lines.long i { animation: dim 1.4s var(--ease) both; animation-delay: calc(var(--k) * 60ms); }
-.card3.active.ready .lines.short i { animation: grow-line 0.7s var(--ease) both; animation-delay: calc(350ms + var(--k) * 140ms); }
-.card3:not(.ready) .tick-dot { background: var(--surface-3); color: var(--muted); box-shadow: none; }
-
-/* A spark travels from the question on card 1 to the need on card 2 */
-.spark { position: absolute; left: 64px; top: 22%; width: 10px; height: 10px; border-radius: 50%; background: #ffe6d4; box-shadow: 0 0 10px 3px rgba(255, 140, 70, 0.95), 0 0 30px 8px rgba(255, 107, 44, 0.6); opacity: 0; pointer-events: none; transform: translateZ(90px); }
-.spark.go { animation: spark-fly 0.9s var(--ease) both; }
-@keyframes spark-fly {
-  0% { opacity: 0; transform: translate3d(0, 0, 90px) scale(0.5); }
-  15% { opacity: 1; }
-  80% { opacity: 1; }
-  100% { opacity: 0; transform: translate3d(46px, 150px, 90px) scale(1.2); }
+.card3 { cursor: pointer; outline: none; }
+.card3:focus-visible { box-shadow: 0 0 0 2px var(--accent), 0 0 46px -4px rgba(255, 107, 44, 0.6); }
+.stage.hovering .card3.active { transform: translateZ(96px) translateX(-12px) scale(1.02); }
+.card3-hint {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  font: 600 11px var(--sans); color: #ffb27a; opacity: 0; transform: translateX(-6px);
+  transition: opacity 0.25s var(--ease), transform 0.25s var(--ease);
 }
-
-.stage-foot { position: absolute; left: 50%; bottom: clamp(4px, 2vh, 20px); transform: translateX(-50%); z-index: 4; display: flex; align-items: center; gap: var(--s3); white-space: nowrap; }
-.dots { display: flex; align-items: center; gap: 2px; }
-.sdot { width: 22px; height: 22px; padding: 7px; border: 0; background: var(--border-strong); background-clip: content-box; border-radius: 999px; cursor: pointer; transition: width 0.3s var(--ease), background-color 0.3s; }
-.sdot.on { width: 36px; background-color: var(--accent); box-shadow: inset 0 0 0 7px var(--bg); }
-.stage-hint { font: 500 11px var(--mono); color: var(--muted); letter-spacing: 0.04em; }
-.replay { border: 0; background: none; padding: 4px; color: var(--accent); font: 600 12px var(--sans); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .tilt { transform: none !important; }
-  .spark { display: none; }
+.stage.hovering .card3.active .card3-hint, .card3:focus-visible .card3-hint { opacity: 1; transform: none; }
+.stage.hovering .card3.active .c-pill.guess { border-style: solid; border-color: var(--accent-line); color: var(--text); animation-play-state: paused; }
+.stage-hint {
+  position: absolute; left: 50%; bottom: clamp(6px, 2vh, 20px); transform: translateX(-50%);
+  font: 500 11px var(--mono); letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; pointer-events: none;
 }
+@media (hover: none) { .stage-hint { display: none; } }
+@media (prefers-reduced-motion: reduce) { .tilt { transform: none !important; } }
 
-/* Keep the 3D stack inside its column: anchor it left, and keep the copy above it */
-.stage { justify-items: start; padding-left: clamp(0px, 3vw, 48px); }
+/* Keep the stack in the left column and the text above it */
+.hero3 { --stage-pad: clamp(0px, 3vw, 48px); }
+.stage { justify-items: start; padding-left: var(--stage-pad); }
 .stack { width: min(360px, 100%); }
 .hero3-copy { position: relative; z-index: 2; }
-@media (max-width: 960px) { .stage { justify-items: center; padding-left: 0; } }
+.nbeam { left: calc(var(--stage-pad) + 150px + var(--x)); }
+.nbeam.n1 { --x: -26px; }
+.nbeam.n2 { --x: 0px; }
+.nbeam.n3 { --x: 26px; }
+.halo { left: calc(var(--stage-pad) + 180px); }
+.card3-title { white-space: nowrap; }
+.card3-hint { position: absolute; top: var(--s4); right: 16px; margin: 0; }
+@media (max-width: 960px) {
+  .stage { justify-items: center; padding-left: 0; }
+  .nbeam, .halo { left: 50%; }
+}
+.nbeam, .halo { z-index: 0; }
+.tilt { position: relative; z-index: 1; }

@@ -289,8 +289,10 @@ export default function Home() {
     setTimeout(() => go(step2), 60);
   }
 
-  // Hero cards: 0 = the prompt, 1 = the needs, 2 = the answers. Jump to the furthest step reached.
-  function jumpFromHero(card: 0 | 1 | 2) {
+  // Hero cards: 0 = the prompt, 1 = the needs, 2 = the answers. Before any analysis
+  // the first card runs the example; afterwards each card jumps to its step.
+  function openFromHero(card: 0 | 1 | 2) {
+    if (!analysis) return loadPrompt(heroDemo.prompt);
     if (card === 2 && opt) go(step3);
     else if (card >= 1 && canOptimize) go(stepNeeds);
     else go(step1);
@@ -304,7 +306,6 @@ export default function Home() {
 
   return (
     <>
-      <div className="backdrop" />
 
       <header className={`nav ${scrolled ? "scrolled" : ""}`}>
         <div className="nav-left">
@@ -331,7 +332,7 @@ export default function Home() {
         </div>
       </header>
 
-      <Hero onCheck={loadPrompt} onJump={jumpFromHero} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
+      <Hero onCheck={loadPrompt} onOpen={openFromHero} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
 
       <div className="workspace">
         <main>
