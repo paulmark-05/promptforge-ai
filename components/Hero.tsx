@@ -35,18 +35,31 @@ export function Hero({
   demo: HeroDemo;
 }) {
   const [text, setText] = useState("");
-  const [active, setActive] = useState(0);
-  const [hovering, setHovering] = useState(false);
+  const [auto, setAuto] = useState(0); // where the timed story is
+  const [held, setHeld] = useState<number | null>(null); // card the visitor is pointing at
+  const active = held ?? auto;
   const tiltRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // The cards take turns coming forward, telling the before-to-after story.
-  // Hovering hands control to the visitor; autoplay resumes when they leave.
+  // While a card is held (hovered or focused) it stays in front; when the
+  // visitor leaves, the story carries on from that card.
   useEffect(() => {
-    if (hovering || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const id = setInterval(() => setActive((a) => (a + 1) % 3), 3000);
+    if (held !== null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setAuto((a) => (a + 1) % 3), 3000);
     return () => clearInterval(id);
-  }, [hovering]);
+  }, [held]);
+
+  const heldRef = useRef<number | null>(null);
+  function hold(index: number) {
+    heldRef.current = index;
+    setHeld(index);
+  }
+  function release() {
+    if (heldRef.current !== null) setAuto(heldRef.current);
+    heldRef.current = null;
+    setHeld(null);
+  }
 
   // Gentle 3D tilt toward the pointer (mouse only, off for reduced motion).
   function tilt(e: React.PointerEvent<HTMLDivElement>) {
@@ -58,7 +71,7 @@ export function Hero({
     tiltRef.current?.style.setProperty("--rx", `${(-y * 8).toFixed(2)}deg`);
   }
   function leave() {
-    setHovering(false);
+    release();
     tiltRef.current?.style.setProperty("--ry", "0deg");
     tiltRef.current?.style.setProperty("--rx", "0deg");
   }
@@ -66,10 +79,15 @@ export function Hero({
     index,
     active,
     hint: demo.live ? "Open step" : index === 0 ? "Try it" : "Type yours",
-    onFocus: () => setActive(index),
-    // Before the visitor has a prompt, cards 2 and 3 invite them to type one.
-    onOpen: () => (!demo.live && index > 0 ? inputRef.current?.focus() : onOpen(index)),
+    onFocus: () => hold(index),
+    onBlur: release,
+    onOpen: () => openCard(index),
   });
+  // Before the visitor has a prompt, cards 2 and 3 invite them to type one.
+  function openCard(index: 0 | 1 | 2) {
+    if (!demo.live && index > 0) inputRef.current?.focus();
+    else onOpen(index);
+  }
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,11 +97,13 @@ export function Hero({
   return (
     <section className="hero3" id="top">
       <div className="hero3-bg" aria-hidden>
+        <div className="sky" />
+        <div className="sun" />
         <div className="floor" />
       </div>
 
       <div className="hero3-grid">
-        <div className={`stage ${hovering ? "hovering" : ""}`} onPointerEnter={() => setHovering(true)} onPointerMove={tilt} onPointerLeave={leave}>
+        <div className={`stage ${held !== null ? "hovering" : ""}`} onPointerMove={tilt} onPointerLeave={leave}>
           <span className="nbeam n1" aria-hidden />
           <span className="nbeam n2" aria-hidden />
           <span className="nbeam n3" aria-hidden />
@@ -95,10 +115,11 @@ export function Hero({
                 {demo.prompt}
                 <span className="caret" />
               </div>
-              <div className="c-sub">{demo.guesses.length ? "The model has to guess" : "Nothing major left to guess"}</div>
+              <div className="c-sub">{demo.guesses.length ? "Left for the model to guess" : "Nothing important left to guess"}</div>
               <div className="c-pills">
                 {demo.guesses.map((g, i) => (
                   <span key={g} className="c-pill guess" style={{ "--k": i } as React.CSSProperties}>
+                    <b className="q">?</b>
                     {g}
                   </span>
                 ))}
@@ -107,6 +128,7 @@ export function Hero({
 
             <Card {...cardProps(1)} step="02" title="What you need">
               <div className="c-pills">
+                {demo.live && demo.needs.length === 0 && <span className="c-pill empty">Pick them in step 2</span>}
                 {demo.needs.map((n, i) => (
                   <span key={n} className="c-pill need" style={{ "--k": i } as React.CSSProperties}>
                     <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
@@ -116,19 +138,19 @@ export function Hero({
                   </span>
                 ))}
               </div>
-              <div className="c-sub">{demo.live && demo.needs.length === 0 ? "Tell PromptForge in step 2" : "Now the model knows the target"}</div>
+              <div className="c-sub">{demo.live && demo.needs.length === 0 ? "Audience, length, format, tone" : "No more guessing: the target is clear"}</div>
             </Card>
 
-            <Card {...cardProps(2)} step="03" title="The answer you meant">
+            <Card {...cardProps(2)} step="03" title="The result">
               <div className="c-compare">
                 <div className="c-row">
-                  <span className="c-lbl">Vague prompt</span>
+                  <span className="c-lbl">Vague prompt<small>long, generic</small></span>
                   <div className="lines long">
                     {Array.from({ length: 7 }, (_, i) => <i key={i} style={{ "--k": i } as React.CSSProperties} />)}
                   </div>
                 </div>
                 <div className="c-row">
-                  <span className="c-lbl hot">With your needs</span>
+                  <span className="c-lbl hot">With your needs<small>to the point</small></span>
                   <div className="lines short">
                     {Array.from({ length: 3 }, (_, i) => <i key={i} style={{ "--k": i } as React.CSSProperties} />)}
                   </div>
@@ -140,12 +162,17 @@ export function Hero({
                     <path d="M3.5 8.5l3 3 6-7" />
                   </svg>
                 </span>
-                {demo.outcome ? OUTCOME_TEXT[demo.outcome] : "Fits what you asked, without the padding"}
+                {demo.outcome ? OUTCOME_TEXT[demo.outcome] : "Exactly what you asked for"}
               </div>
             </Card>
           </div>
           </div>
-          <p className="stage-hint" aria-hidden>{hovering ? "Click a card" : "Hover the cards"}</p>
+          <div className="hits" aria-hidden>
+            {([0, 1, 2] as const).map((i) => (
+              <span key={i} onPointerEnter={() => hold(i)} onClick={() => openCard(i)} />
+            ))}
+          </div>
+          <p className="stage-hint" aria-hidden>{held !== null ? "Click to open" : "Hover a card"}</p>
         </div>
 
         <div className="hero3-copy">
@@ -155,7 +182,7 @@ export function Hero({
             Get the answer you <span className="neon-word">meant</span>.
           </h1>
           <p className="lede">
-            A vague prompt makes the model guess, so you get a long, generic answer. PromptForge shows what your prompt leaves out,
+            A vague prompt makes the model guess, so you get a long, generic answer. <em className="brand-em">PromptForge</em> shows what your prompt leaves out,
             helps you say it, and proves the difference side by side.
           </p>
 
@@ -211,6 +238,7 @@ function Card({
   title,
   hint,
   onFocus,
+  onBlur,
   onOpen,
   children,
 }: {
@@ -220,6 +248,7 @@ function Card({
   title: string;
   hint: string;
   onFocus: () => void;
+  onBlur: () => void;
   onOpen: () => void;
   children: React.ReactNode;
 }) {
@@ -229,8 +258,8 @@ function Card({
       role="button"
       tabIndex={0}
       aria-label={`${title}: ${hint}`}
-      onPointerEnter={onFocus}
       onFocus={onFocus}
+      onBlur={onBlur}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {

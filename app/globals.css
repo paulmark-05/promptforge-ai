@@ -562,10 +562,46 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
 .nbeam.n3 { --x: 26px; }
 .halo { left: calc(var(--stage-pad) + 180px); }
 .card3-title { white-space: nowrap; }
-.card3-hint { position: absolute; top: var(--s4); right: 16px; margin: 0; }
+.card3-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.card3-hint { flex: none; margin: 0; }
 @media (max-width: 960px) {
   .stage { justify-items: center; padding-left: 0; }
   .nbeam, .halo { left: 50%; }
 }
 .nbeam, .halo { z-index: 0; }
 .tilt { position: relative; z-index: 1; }
+
+/* Fixed hover zones over each card's resting spot (cards move, zones do not) */
+.tilt, .hits { grid-area: 1 / 1; }
+.hits { position: relative; z-index: 3; align-self: center; width: min(360px, 100%); height: clamp(380px, 64vh, 520px); display: grid; grid-template-rows: 35% 35% 30%; }
+.hits span { cursor: pointer; }
+.stage .card3 { pointer-events: none; }
+
+/* Card content details */
+.c-pill .q { color: var(--accent); font-weight: 700; margin-right: 1px; }
+.c-pill.empty { border: 1px dashed var(--accent-line); color: #ffb27a; }
+.c-lbl small { display: block; margin-top: 2px; font: 500 10px var(--mono); color: var(--muted); opacity: 0.85; }
+
+/* Brand highlight in the intro line */
+.brand-em { font-style: italic; font-weight: 600; color: #ffb27a; text-shadow: 0 0 14px rgba(255, 107, 44, 0.45); padding-right: 1px; }
+
+/* Top of the page: warm glow and a field of orange dots above the grid */
+.sun {
+  position: absolute; top: -340px; right: -220px; width: 860px; height: 860px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 107, 44, 0.34), rgba(255, 107, 44, 0.08) 55%, transparent 72%);
+  animation: sun-drift 9s ease-in-out infinite alternate;
+}
+@keyframes sun-drift { from { transform: translate(0, 0) scale(1); } to { transform: translate(-40px, 30px) scale(1.08); } }
+.sky {
+  position: absolute; left: 0; right: 0; top: 0; height: 62%;
+  background-image: radial-gradient(circle, rgba(255, 150, 90, 0.5) 1px, transparent 1.8px);
+  background-size: 28px 28px;
+  -webkit-mask-image: radial-gradient(ellipse 75% 100% at 62% 0%, #000 15%, transparent 72%);
+  mask-image: radial-gradient(ellipse 75% 100% at 62% 0%, #000 15%, transparent 72%);
+  animation: twinkle 6s ease-in-out infinite;
+}
+@keyframes twinkle { 0%, 100% { opacity: 0.55; } 50% { opacity: 0.85; } }
+@media (prefers-reduced-motion: reduce) { .sun, .sky { animation: none; } }
+.stack, .hits { width: min(380px, 100%); }
+.card3-hint { max-width: 0; overflow: hidden; white-space: nowrap; transition: max-width 0.3s var(--ease), opacity 0.25s var(--ease), transform 0.25s var(--ease); }
+.stage.hovering .card3.active .card3-hint, .card3:focus-visible .card3-hint { max-width: 120px; }
