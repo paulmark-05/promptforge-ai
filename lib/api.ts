@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { hasIntent, type Intent } from "./intent.ts";
 
 export const MAX_PROMPT_CHARS = 6000;
 
@@ -29,4 +30,13 @@ export function handle(fn: (req: Request) => Promise<Response>) {
       return bad(e instanceof Error ? e.message : "Unexpected error.", 502);
     }
   };
+}
+
+// Optional confirmed intent from the client: every field a short string.
+export function readIntent(value: unknown): Intent | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const pick = (k: keyof Intent) => (typeof v[k] === "string" ? (v[k] as string).slice(0, 300) : "");
+  const intent: Intent = { audience: pick("audience"), goal: pick("goal"), length: pick("length"), format: pick("format"), tone: pick("tone"), notes: pick("notes") };
+  return hasIntent(intent) ? intent : null;
 }

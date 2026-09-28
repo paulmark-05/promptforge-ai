@@ -44,12 +44,19 @@ export async function chat(
   let res: Response;
   for (let attempt = 0; ; attempt++) {
     start = Date.now();
-    res = await fetch(`${cfg.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
-      body,
-      signal: AbortSignal.timeout(45_000),
-    });
+    try {
+      res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey}` },
+        body,
+        signal: AbortSignal.timeout(45_000),
+      });
+    } catch (e) {
+      // Network drop or timeout: retry after a short pause, then give up with a clear message.
+      if (attempt >= (opts.retries ?? 1)) throw new Error("Could not reach the LLM service. Check your internet connection and try again.");
+      await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+      continue;
+    }
     if (res.status !== 429 || attempt >= (opts.retries ?? 1)) break;
     // Wait as long as the provider asks (Retry-After), within a cap.
     const waitMs = Math.min((Number(res.headers.get("retry-after")) || 5) * 1000 + 250, opts.maxWaitMs ?? 20_000);

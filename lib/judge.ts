@@ -27,7 +27,7 @@ export function toJudgeScore(raw: { scores?: Record<string, unknown>; feedback?:
   const scores = Object.fromEntries(CRITERIA.map((c) => [c, clampScore(raw?.scores?.[c])])) as Record<string, number>;
   const overall = Math.round((Object.values(scores).reduce((a, b) => a + b, 0) / CRITERIA.length) * 10);
   // Answers are shown in shuffled order, so positional labels would confuse the reader.
-  const feedback = (raw?.feedback ?? "")
+  const feedback = plainSpaces(raw?.feedback ?? "")
     .replace(/\b(than|to|with) (the )?((first|second) answer|answer[ _]?[12])\b/gi, "$1 the other answer")
     .replace(/\b(the )?(first|second) answer\b|\banswer[ _]?[12]\b/gi, "this answer")
     .replace(/^this/, "This");
@@ -130,10 +130,15 @@ export async function judgeBothOrders(
 
 // The reason compares the two answers, so replace positional labels with the real sides.
 function nameAnswers(text: string, first: string, second: string) {
-  const out = text
+  const out = plainSpaces(text)
     .replace(/\b(the )?first answer\b|\banswer[ _]?1\b/gi, `the ${first} answer`)
     .replace(/\b(the )?second answer\b|\banswer[ _]?2\b/gi, `the ${second} answer`);
   return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+// Models often emit non-breaking spaces ("Answer 2"), which plain-space patterns miss.
+function plainSpaces(text: string) {
+  return text.replace(/[   ]/g, " ");
 }
 
 function clip(text: string) {

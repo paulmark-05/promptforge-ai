@@ -137,3 +137,31 @@ test("judge text never shows positional labels to the user", async () => {
   assert.doesNotMatch(f, /answer[ _]?[12]/i);
   assert.match(f, /^This answer is thorough but longer than the other answer\.$/);
 });
+
+test("positional labels are removed even with non-breaking spaces", async () => {
+  const { toJudgeScore } = await import("../lib/judge.ts");
+  const f = toJudgeScore({ feedback: "Answer 1 is thorough but longer than answer 2." }).feedback;
+  assert.doesNotMatch(f, /answer\s*[12]/i);
+});
+
+test("intent statement lists only confirmed needs and is checkable", async () => {
+  const { intentStatement, EMPTY_INTENT } = await import("../lib/intent.ts");
+  const { responseMetrics } = await import("../lib/metrics.ts");
+  assert.equal(intentStatement("explain ML", EMPTY_INTENT), "explain ML");
+  const s = intentStatement("explain ML", { ...EMPTY_INTENT, audience: "My sister", length: "Under 100 words", format: "Bullet points" });
+  assert.match(s, /It is for: My sister/);
+  assert.doesNotMatch(s, /Tone/);
+  const long = responseMetrics(s, "word ".repeat(150));
+  assert.equal(long.checks.find((c) => c.label === "Word limit")?.passed, false);
+});
+
+test("offline optimizer uses confirmed needs and invents no word limit", async () => {
+  const { optimizeOffline } = await import("../lib/optimizer.ts");
+  const { EMPTY_INTENT } = await import("../lib/intent.ts");
+  const all = ["role", "context", "cot", "format", "constraints", "delimiters"] as const;
+  const withNeeds = optimizeOffline("explain machine learning", [...all], { ...EMPTY_INTENT, audience: "My 12-year-old sister", length: "Under 120 words" });
+  assert.match(withNeeds.optimizedPrompt, /This is for: My 12-year-old sister/);
+  assert.match(withNeeds.optimizedPrompt, /under 120 words/);
+  const without = optimizeOffline("explain machine learning", [...all]);
+  assert.doesNotMatch(without.optimizedPrompt, /\d+ words|\[/);
+});

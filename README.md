@@ -2,21 +2,24 @@
 
 An intelligent Generative AI platform that helps users **create, optimize and evaluate prompts** for Large Language Models (LLMs).
 
-PromptForge analyzes a prompt, finds its weaknesses, rewrites it with proven prompt-engineering techniques, then runs the original and optimized prompts side by side and scores both responses with an LLM judge.
+A vague prompt makes the model guess. PromptForge shows what your prompt leaves out, asks what you actually need (audience, purpose, length, format, tone), rewrites the prompt with proven techniques around those needs, then runs both versions and has a bias-corrected judge compare the answers against your stated needs.
 
 **Live demo:** _add your Vercel link here_
 
-![Prompt analysis](docs/screenshots/02b-analysis-card.png)
+![PromptForge home](docs/screenshots/01-home.png)
 
-![Optimization](docs/screenshots/03-optimize-card.png)
+![Say what you need](docs/screenshots/10-needs.png)
+
+![Comparison](docs/screenshots/09-live-compare.png)
 
 ## Features
 
 | Step | What the user can do |
 |------|----------------------|
-| 1. Analyze | Score any prompt 0–100 on 8 weighted dimensions (clarity, specificity, context, role, output format, constraints, examples, structure), see a grade, the detected task type and a ranked list of issues with fixes. Optional AI critique from the LLM. |
-| 2. Optimize | Pick techniques (role prompting, context, chain-of-thought, output format, constraints, few-shot, delimiters) and get a rewritten prompt with a before/after score and a list of every change. The result is editable and re-scored live. |
-| 3. Evaluate | Run both prompts on the same model. Each response is scored by an LLM judge on relevance, completeness, accuracy, clarity and instruction-following, plus rule-based checks (word limits, JSON validity, tables, code blocks, list counts, readability). |
+| 1. Check | Score any prompt 0–100 on 8 weighted dimensions (clarity, specificity, context, role, output format, constraints, examples, structure), see a grade, the detected task type and a ranked list of issues with fixes. Optional AI critique from the LLM. |
+| 2. Say what you need | Confirm who it is for, the purpose, length, format and tone, from suggested options or your own words. These needs drive the rewrite and are what both answers are judged against. |
+| 3. Rewrite | Pick techniques (role prompting, context, chain-of-thought, output format, constraints, few-shot, delimiters) and get a rewritten prompt with a before/after score and a list of every change. The result is editable and re-scored live. |
+| 4. Compare | Run both prompts on the same model. Each response is scored by an LLM judge on relevance, completeness, accuracy, clarity and instruction-following, plus rule-based checks (word limits, JSON validity, tables, code blocks, list counts, readability). |
 | Iterate | Use the optimized prompt as the new starting point and repeat. |
 | History | The last 20 optimizations are kept in the browser with their scores. |
 | Guardrails | Prompt-injection patterns are detected, capped at a score of 20 and never optimized or executed. User text is always passed to the LLM as tagged data. |
@@ -48,11 +51,11 @@ Get a free Groq key at https://console.groq.com/keys. Without a key, the app run
 ## Tests and benchmark
 
 ```bash
-npm test            # 14 unit tests
+npm test            # 17 unit tests
 npm run benchmark   # scores 20 labelled prompts + 5 injection attempts
 ```
 
-With `LLM_API_KEY` set, the benchmark also optimizes the 10 weak prompts with the LLM, generates answers for the original and optimized versions, and compares them head to head in both orders. Results are written to `benchmark-results.json`.
+With `LLM_API_KEY` set, the benchmark also optimizes the 10 weak prompts with their real needs, runs both versions, and compares the answers head to head in both orders, against the real need and against the bare request. Results are written to `benchmark-results.json`.
 
 ## Architecture
 
@@ -60,40 +63,23 @@ With `LLM_API_KEY` set, the benchmark also optimizes the 10 weak prompts with th
 
 ## Results
 
-From `npm run benchmark` (20 hand-labelled prompts, 5 injection attempts; live runs on Groq `openai/gpt-oss-120b`):
+Live run on Groq `openai/gpt-oss-120b`, 9 weak prompts, each with a hand-written real need (`npm run benchmark`):
 
-| Metric | Result |
-|---|---|
-| Weak vs strong prompt classification | 95% (19/20) |
-| Prompt-injection detection | 5/5, 0 false positives |
-| Prompt score of weak prompts after LLM optimization | 21.8 → 71–81 |
-| Answer quality, original vs optimized (head-to-head judge, both orders) | 88.8 vs 89.4, within judging noise |
-| Output tokens per answer, original → optimized | 993 → 529 (−47%) |
-| Latency per answer, original → optimized | 2.5 s → 1.5 s (−39%) |
+| | Vague prompt | PromptForge prompt |
+|---|---|---|
+| Judge score against the real need | 51.2 | **92.7** (9 of 9 wins) |
+| Judge score against the vague request | 85.1 | 80.1 |
+| Met the requested word limit | 2 of 9 | 7 of 9 |
+| Average answer length | 487 words | 112 words (−77%) |
+| Output tokens / latency | 778 / 3.7 s | 197 / 2.0 s |
 
-On a strong model, optimized prompts give answers of the same quality that are shorter, faster and more structured.
+Judged against a vague request, a long generic answer looks fine. Judged against what the person actually needed, it loses every time. That is why PromptForge asks what you need before it rewrites anything.
+
+Analyzer: 95% weak vs strong classification on 20 labelled prompts, 5/5 prompt injections detected with 0 false positives, about 1 ms per analysis.
 
 ### How answers are compared
 
-Both answers go to one judge call and are scored against the **original** request on relevance, completeness, accuracy, clarity, conciseness and instruction following. Each pair is judged twice with the order swapped, because LLM judges favour whichever answer they read first. The winner is decided from the averaged criterion scores, not the judge's free-choice pick (which leans towards longer answers), and only when both orders agree. Otherwise the result is reported as too close to call.
-
-## Architecture
-
-![Architecture](docs/screenshots/00-architecture.png)
-
-## Results
-
-From `npm run benchmark` (20 hand-labelled prompts, 5 injection attempts, Groq `openai/gpt-oss-120b`):
-
-| Metric | Result |
-|---|---|
-| Weak vs strong prompt classification | 95% (19/20) |
-| Prompt-injection detection | 5/5, 0 false positives |
-| Prompt score of weak prompts after LLM optimization | 21.8 → 80.6 |
-| LLM-judge score of answers, original vs optimized | 91.6 vs 90.2 (no measurable gain) |
-| Mean generation latency | 2.1 s |
-
-On a strong model, optimized prompts made answers more structured but did not raise judged quality for simple requests. An earlier optimizer version that added unrequested limits made answers worse (92.2 vs 87.2), and was fixed.
+Both answers go to one judge call and are scored against the **same target**: your original request plus the needs you confirmed, on relevance, completeness, accuracy, clarity, conciseness and instruction following. Each pair is judged twice with the order swapped, because LLM judges favour whichever answer they read first. The winner is decided from the averaged criterion scores, not the judge's free-choice pick (which leans towards longer answers), and only when both orders agree.
 
 ## Project structure
 
@@ -103,6 +89,7 @@ app/
   api/analyze/route.ts   rule-based analysis + optional AI critique
   api/optimize/route.ts  LLM rewrite, falls back to templates
   api/generate/route.ts  runs a prompt on the LLM
+  api/intent/route.ts    suggests likely needs for a prompt
   api/evaluate/route.ts  LLM judge + rule checks for a single answer
   api/compare/route.ts   head-to-head judge of two answers (one order per call)
   api/status/route.ts    reports whether a server key is configured
@@ -111,6 +98,8 @@ lib/
   optimizer.ts           offline template optimizer and technique list
   metrics.ts             response checks (word limit, JSON, table, readability…)
   judge.ts               pairwise judge, both-order combining, bias handling
+  intent.ts              needs model, presets, the judging yardstick
+  results.ts             measured numbers shown on the landing page
   llm.ts                 OpenAI-compatible client + tolerant JSON parser
   prompts.ts             system prompts for critic, optimizer and judge
 tests/                   unit tests

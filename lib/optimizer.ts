@@ -1,8 +1,10 @@
 // Template-based optimizer used when no LLM key is configured (offline mode).
 // It rebuilds the prompt into labelled sections using standard prompt
-// engineering techniques, filling in defaults based on the detected task type.
+// engineering techniques. Needs the user confirmed are always included; any
+// other defaults stay neutral, so the prompt never gains invented requirements.
 
 import { analyzePrompt, type TaskType } from "./analyzer.ts";
+import { hasIntent, type Intent } from "./intent.ts";
 
 export type TechniqueId = "role" | "context" | "cot" | "format" | "constraints" | "fewshot" | "delimiters";
 
@@ -42,10 +44,10 @@ const ROLES: Record<TaskType, string> = {
 const FORMATS: Record<TaskType, string> = {
   coding: "1. A short explanation of the approach.\n2. The complete code in a single fenced code block.\n3. A short example showing how to run or use it.",
   writing: "Well-structured prose with a clear opening, body and closing. Use short paragraphs.",
-  explanation: "Start with a one-sentence definition, explain the idea in 3 to 5 bullet points, then end with one real-world example.",
-  summarization: "A one-line TL;DR, followed by 5 bullet points with the key takeaways.",
+  explanation: "Start with a one-sentence definition, explain the key points, then give one real-world example.",
+  summarization: "A one-line TL;DR, followed by bullet points with the key takeaways.",
   analysis: "A markdown table comparing the options on clear criteria, followed by a 2 to 3 sentence recommendation.",
-  brainstorming: "A numbered list of 10 ideas, each with a one-sentence rationale.",
+  brainstorming: "A numbered list of ideas, each with a one-sentence rationale.",
   translation: "Only the translated text, followed by brief notes on any phrase with no direct equivalent.",
   general: "A clear, well-organised answer using short paragraphs or bullet points.",
 };
@@ -61,11 +63,24 @@ const COT: Record<TaskType, string> = {
   general: "Think through the question step by step before giving your final answer.",
 };
 
-export function optimizeOffline(prompt: string, techniques: TechniqueId[]): OptimizeResult {
+// A short example of the wanted style, on an unrelated topic, so it shows form without inventing content.
+const FEWSHOT: Record<TaskType, string> = {
+  coding: 'Example of the style wanted:\n"Approach: use two pointers. Code: (one short block). Usage: is_ok(\'abc\') returns False."',
+  writing: 'Example of the style wanted:\n"Hi Priya, thanks for the quick reply. I have attached the notes and will follow up on Friday."',
+  explanation: 'Example of the style wanted:\n"Photosynthesis is how plants make food from sunlight. For example, a leaf turns light, water and air into sugar."',
+  summarization: 'Example of the style wanted:\n"TL;DR: sales rose because of the new app.\n- Downloads doubled\n- Repeat orders grew"',
+  analysis: 'Example of the style wanted:\n"Option A is cheaper but slower. Recommendation: choose A if the budget is fixed."',
+  brainstorming: 'Example of the style wanted:\n"1. Campus laundry pickup: students lack time, and it needs only a bike and a phone."',
+  translation: 'Example of the style wanted:\n"Bonjour, comment allez-vous ? (formal; \'tu\' would be casual)"',
+  general: 'Example of the style wanted:\n"Short answer first, then the reasons in two or three sentences."',
+};
+
+export function optimizeOffline(prompt: string, techniques: TechniqueId[], intent?: Intent | null): OptimizeResult {
   const a = analyzePrompt(prompt);
   const t = a.taskType;
   const dim = Object.fromEntries(a.dimensions.map((d) => [d.key, d.score]));
   const use = (id: TechniqueId) => techniques.includes(id);
+  const need = hasIntent(intent) ? intent : null;
   const changes: Change[] = [];
   const sections: [string, string][] = [];
 
@@ -74,40 +89,59 @@ export function optimizeOffline(prompt: string, techniques: TechniqueId[]): Opti
     changes.push({ technique: "Role prompting", description: `Added an expert persona suited to ${article(t)} ${t} task.` });
   }
   sections.push(["Task", prompt.trim()]);
-  if (use("context") && dim.context < 5) {
-    sections.push(["Context", "Audience: [who will read this, e.g. beginners, managers]\nPurpose: [why you need it and how it will be used]"]);
-    changes.push({ technique: "Context setting", description: "Added audience and purpose slots for you to fill in." });
+
+  // Confirmed needs always go in: they are the user's real requirements.
+  const context = need ? [need.audience.trim() && `This is for: ${need.audience.trim()}.`, need.goal.trim() && `Purpose: ${need.goal.trim()}.`].filter(Boolean) : [];
+  if (context.length) {
+    sections.push(["Context", context.join("\n")]);
+    changes.push({ technique: "Context setting", description: "Added the audience and purpose you confirmed." });
+  } else if (use("context") && dim.context < 5) {
+    sections.push(["Context", "No audience is given, so write for an intelligent reader who is new to the topic."]);
+    changes.push({ technique: "Context setting", description: "Set a neutral default audience because none was confirmed." });
   }
   if (use("cot")) {
     sections.push(["Approach", COT[t]]);
     changes.push({ technique: "Chain-of-thought", description: "Asked the model to reason step by step before answering." });
   }
-  if (use("format") && dim.format < 7) {
+  const format = need?.format.trim();
+  if (format) {
+    sections.push(["Output format", `${format}.`]);
+    changes.push({ technique: "Output formatting", description: "Used the format you asked for." });
+  } else if (use("format") && dim.format < 7) {
     sections.push(["Output format", FORMATS[t]]);
-    changes.push({ technique: "Output formatting", description: "Defined the structure of the expected answer." });
+    changes.push({ technique: "Output formatting", description: "Defined a clear structure for the answer." });
   }
+
+  const rules: string[] = [];
+  const length = need?.length.trim();
+  if (length && !/as long as needed/i.test(length)) rules.push(`Keep it ${length.charAt(0).toLowerCase()}${length.slice(1)}.`);
+  if (need?.tone.trim()) rules.push(`Tone: ${need.tone.trim()}.`);
+  if (need?.notes.trim()) rules.push(need.notes.trim().replace(/([^.])$/, "$1."));
   if (use("constraints") && dim.constraints < 7) {
-    sections.push([
-      "Constraints",
-      "- Keep the answer under 300 words unless more detail is essential.\n- Use plain language and define any technical terms.\n- If information is missing or uncertain, say so instead of guessing.",
-    ]);
-    changes.push({ technique: "Constraints", description: "Added length, clarity and honesty constraints." });
+    rules.push("Use plain language and explain any technical terms.", "If something is uncertain, say so instead of guessing.");
+  }
+  if (rules.length) {
+    sections.push([need ? "Requirements" : "Constraints", rules.map((r) => `- ${r}`).join("\n")]);
+    changes.push({
+      technique: "Constraints",
+      description: need ? "Added the length, tone and other needs you confirmed." : "Added clarity and honesty rules, without inventing a length limit.",
+    });
   }
   if (use("fewshot") && dim.examples < 7) {
-    sections.push(["Example", "For example, a good answer looks like this:\n[paste one short example of the output you want]"]);
-    changes.push({ technique: "Few-shot prompting", description: "Added a slot for an example of the ideal output." });
+    sections.push(["Example", FEWSHOT[t]]);
+    changes.push({ technique: "Few-shot prompting", description: "Added a short example of the wanted style on an unrelated topic." });
   }
 
   const delim = use("delimiters");
   if (delim) changes.push({ technique: "Delimiters", description: "Organised the prompt into labelled sections." });
-  const optimizedPrompt = sections
-    .map(([h, body]) => (delim ? `### ${h}\n${body}` : body))
-    .join("\n\n");
+  const optimizedPrompt = sections.map(([h, body]) => (delim ? `### ${h}\n${body}` : body)).join("\n\n");
 
   return {
     optimizedPrompt,
     changes,
-    rationale: `Detected ${article(t)} ${t} task. Rebuilt the prompt with ${changes.length} prompt-engineering technique(s). Replace any [bracketed] slots with your own details for the best result.`,
+    rationale: need
+      ? `Built from the needs you confirmed for this ${t} task, using ${changes.length} prompt-engineering technique(s).`
+      : `Detected ${article(t)} ${t} task and applied ${changes.length} technique(s). No needs were confirmed, so the prompt leaves audience and length open.`,
     mode: "offline",
   };
 }

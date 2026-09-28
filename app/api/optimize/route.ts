@@ -3,7 +3,8 @@ import { analyzePrompt } from "../../../lib/analyzer";
 import { optimizeOffline, TECHNIQUES, type TechniqueId, type OptimizeResult } from "../../../lib/optimizer";
 import { chat, getConfig, parseJson } from "../../../lib/llm";
 import { OPTIMIZER_SYSTEM, wrapPrompt } from "../../../lib/prompts";
-import { handle, readText, userKey } from "../../../lib/api";
+import { handle, readIntent, readText, userKey } from "../../../lib/api";
+import { intentStatement } from "../../../lib/intent";
 
 export const maxDuration = 60;
 
@@ -15,6 +16,7 @@ export const POST = handle(async (req) => {
     ? body.techniques.filter((t: unknown): t is TechniqueId => typeof t === "string" && valid.has(t))
     : TECHNIQUES.map((t) => t.id);
 
+  const intent = readIntent(body.intent);
   const before = analyzePrompt(prompt);
   if (before.injectionRisk) {
     return NextResponse.json({
@@ -40,7 +42,7 @@ export const POST = handle(async (req) => {
           { role: "system", content: OPTIMIZER_SYSTEM },
           {
             role: "user",
-            content: `${wrapPrompt(prompt)}\n\nWeaknesses found:\n${issues.join("\n") || "- none"}\n\nTechniques to apply:\n${labels.join("\n")}`,
+            content: `${wrapPrompt(prompt)}\n\n<confirmed_needs>\n${intent ? intentStatement("", intent).replace(/^\s*What I actually need:\n/, "") : "(none confirmed)"}\n</confirmed_needs>\n\nWeaknesses found:\n${issues.join("\n") || "- none"}\n\nTechniques to apply:\n${labels.join("\n")}`,
           },
         ],
         { temperature: 0.4, json: true, maxTokens: 3000 },
@@ -52,7 +54,7 @@ export const POST = handle(async (req) => {
       warning = `AI optimizer failed, used offline templates instead. ${e instanceof Error ? e.message : ""}`;
     }
   }
-  result ??= optimizeOffline(prompt, techniques);
+  result ??= optimizeOffline(prompt, techniques, intent);
   const after = analyzePrompt(result.optimizedPrompt);
   return NextResponse.json({ ...result, before: before.score, after: after.score, warning });
 });
