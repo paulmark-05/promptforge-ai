@@ -85,7 +85,7 @@ Both answers go to one judge call and are scored against the **same target**: yo
 
 ```
 app/
-  page.tsx               UI: analyze → optimize → evaluate workflow
+  page.tsx               UI: check → needs → rewrite → compare workflow
   api/analyze/route.ts   rule-based analysis + optional AI critique
   api/optimize/route.ts  LLM rewrite, falls back to templates
   api/generate/route.ts  runs a prompt on the LLM
@@ -99,7 +99,6 @@ lib/
   metrics.ts             response checks (word limit, JSON, table, readability…)
   judge.ts               pairwise judge, both-order combining, bias handling
   intent.ts              needs model, presets, the judging yardstick
-  results.ts             measured numbers shown on the landing page
   llm.ts                 OpenAI-compatible client + tolerant JSON parser
   prompts.ts             system prompts for critic, optimizer and judge
 tests/                   unit tests

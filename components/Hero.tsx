@@ -1,105 +1,186 @@
 "use client";
 
-import { HERO_STATS } from "../lib/results";
-import { useCountUp } from "./ui";
+import { useEffect, useState } from "react";
+
+export interface HeroDemo {
+  prompt: string;
+  guesses: string[]; // what the prompt leaves the model to guess
+  needs: string[]; // what the user said they need
+  outcome: "better" | "close" | "worse" | null; // result of the user's own comparison
+  live: boolean; // true once the user has analyzed their own prompt
+}
 
 const STEPS = [
-  { title: "Check your prompt", text: "See what it leaves the model to guess." },
-  { title: "Say what you need", text: "Audience, purpose, length, format, tone." },
-  { title: "Rewrite it", text: "Proven techniques, built on your needs." },
-  { title: "Compare the answers", text: "A fair judge scores both, plus the cost." },
+  { title: "Check your prompt", text: "See what it leaves to guess" },
+  { title: "Say what you need", text: "Audience, length, format, tone" },
+  { title: "Rewrite it", text: "Built on what you asked for" },
+  { title: "Compare the answers", text: "A fair judge scores both" },
 ];
 
-export function Hero({ onStart, onSample }: { onStart: () => void; onSample: () => void }) {
+const OUTCOME_TEXT: Record<NonNullable<HeroDemo["outcome"]>, string> = {
+  better: "The judge preferred your version",
+  close: "Same quality, and shorter",
+  worse: "Try different needs and run again",
+};
+
+export function Hero({
+  onCheck,
+  samples,
+  demo,
+}: {
+  onCheck: (text: string) => void;
+  samples: { title: string; prompt: string }[];
+  demo: HeroDemo;
+}) {
+  const [text, setText] = useState("");
+  const [active, setActive] = useState(0);
+
+  // The cards take turns coming forward, telling the before-to-after story.
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setActive((a) => (a + 1) % 3), 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (text.trim()) onCheck(text.trim());
+  };
+
   return (
-    <section className="hero2" id="top">
-      <div className="beams" aria-hidden>
-        <span className="beam b1" />
-        <span className="beam b2" />
-        <span className="beam b3" />
-        <span className="column" />
-        <Arcs />
+    <section className="hero3" id="top">
+      <div className="hero3-bg" aria-hidden>
+        <div className="floor" />
+        <div className="horizon" />
       </div>
 
-      <div className="tiles">
-        {HERO_STATS.map((s, i) => (
-          <Tile key={s.label} {...s} index={i} />
-        ))}
-      </div>
+      <div className="hero3-grid">
+        <div className="stage" aria-hidden>
+          <span className="nbeam n1" />
+          <span className="nbeam n2" />
+          <span className="nbeam n3" />
+          <div className="halo" />
+          <div className="stack">
+            <Card index={0} active={active} step="01" title="Your prompt">
+              <div className="c-prompt">
+                {demo.prompt}
+                <span className="caret" />
+              </div>
+              <div className="c-sub">{demo.guesses.length ? "The model has to guess" : "Nothing major left to guess"}</div>
+              <div className="c-pills">
+                {demo.guesses.map((g, i) => (
+                  <span key={g} className="c-pill guess" style={{ "--k": i } as React.CSSProperties}>
+                    {g}
+                  </span>
+                ))}
+              </div>
+            </Card>
 
-      <div className="hero-copy">
-        <h1>
-          Say what you need.
-          <br />
-          Get the answer you meant.
-        </h1>
-        <p className="lede">
-          A vague prompt makes the model guess. PromptForge shows what your prompt leaves out, helps you say it, rewrites the
-          prompt, and proves the difference by comparing both answers.
-        </p>
-        <div className="hero-actions">
-          <button className="cta" onClick={onStart}>
-            <span>Check a prompt</span>
-            <span className="knob" aria-hidden>
-              <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 5l8 8M13 6v7H6" />
-              </svg>
-            </span>
-          </button>
-          <button className="btn lg" onClick={onSample}>Try a sample</button>
+            <Card index={1} active={active} step="02" title="What you need">
+              <div className="c-pills">
+                {demo.needs.map((n, i) => (
+                  <span key={n} className="c-pill need" style={{ "--k": i } as React.CSSProperties}>
+                    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3.5 8.5l3 3 6-7" />
+                    </svg>
+                    {n}
+                  </span>
+                ))}
+              </div>
+              <div className="c-sub">{demo.live && demo.needs.length === 0 ? "Tell PromptForge in step 2" : "Now the model knows the target"}</div>
+            </Card>
+
+            <Card index={2} active={active} step="03" title="The answer you meant">
+              <div className="c-compare">
+                <div className="c-row">
+                  <span className="c-lbl">Vague prompt</span>
+                  <div className="lines long">
+                    {Array.from({ length: 7 }, (_, i) => <i key={i} style={{ "--k": i } as React.CSSProperties} />)}
+                  </div>
+                </div>
+                <div className="c-row">
+                  <span className="c-lbl hot">With your needs</span>
+                  <div className="lines short">
+                    {Array.from({ length: 3 }, (_, i) => <i key={i} style={{ "--k": i } as React.CSSProperties} />)}
+                  </div>
+                </div>
+              </div>
+              <div className="c-verdict">
+                <span className="tick-dot">
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3.5 8.5l3 3 6-7" />
+                  </svg>
+                </span>
+                {demo.outcome ? OUTCOME_TEXT[demo.outcome] : "Fits what you asked, without the padding"}
+              </div>
+            </Card>
+          </div>
+        </div>
+
+        <div className="hero3-copy">
+          <h1>
+            Say what you need.
+            <br />
+            Get the answer you <span className="neon-word">meant</span>.
+          </h1>
+          <p className="lede">
+            A vague prompt makes the model guess, so you get a long, generic answer. PromptForge shows what your prompt leaves out,
+            helps you say it, and proves the difference side by side.
+          </p>
+
+          <form className="try" onSubmit={submit}>
+            <input
+              aria-label="Your prompt"
+              placeholder="Type any prompt, e.g. explain machine learning"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={6000}
+            />
+            <button type="submit" className="try-go" disabled={!text.trim()}>
+              <span>Check it</span>
+              <span className="knob" aria-hidden>
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M5 5l8 8M13 6v7H6" />
+                </svg>
+              </span>
+            </button>
+          </form>
+
+          <div className="try-samples">
+            <span>Or try</span>
+            {samples.map((s) => (
+              <button key={s.title} className="chip" onClick={() => onCheck(s.prompt)}>
+                {s.prompt.length > 34 ? `${s.prompt.slice(0, 32)}…` : s.prompt}
+              </button>
+            ))}
+          </div>
+
+          <ol className="how3">
+            {STEPS.map((s, i) => (
+              <li key={s.title} style={{ "--i": i } as React.CSSProperties}>
+                <span className="how-n">{String(i + 1).padStart(2, "0")}</span>
+                <div>
+                  <b>{s.title}</b>
+                  <span>{s.text}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
       </div>
-
-      <ol className="how">
-        {STEPS.map((s, i) => (
-          <li key={s.title} style={{ "--i": i } as React.CSSProperties}>
-            <span className="how-n">{String(i + 1).padStart(2, "0")}</span>
-            <b>{s.title}</b>
-            <span>{s.text}</span>
-          </li>
-        ))}
-      </ol>
     </section>
   );
 }
 
-function Tile({ value, prefix = "", suffix = "", label, note, index }: (typeof HERO_STATS)[number] & { index: number }) {
-  const n = useCountUp(value, 1400);
+function Card({ index, active, step, title, children }: { index: number; active: number; step: string; title: string; children: React.ReactNode }) {
   return (
-    <div className={`tile t${index}`} style={{ "--i": index } as React.CSSProperties}>
-      <span className="tile-num">
-        {prefix}
-        {n}
-        {suffix}
-      </span>
-      <span className="tile-label">{label}</span>
-      {note && <span className="tile-note">{note}</span>}
+    <div className={`card3 k${index} ${active === index ? "active" : ""}`}>
+      <div className="card3-head">
+        <span className="card3-step">{step}</span>
+        <span className="card3-title">{title}</span>
+      </div>
+      {children}
+      <span className="sheen" />
     </div>
-  );
-}
-
-// Light lines sweeping out from the centre, like the beams spreading on a floor.
-function Arcs() {
-  const curves = Array.from({ length: 7 }, (_, i) => i);
-  return (
-    <svg className="arcs" viewBox="0 0 1200 360" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="arcFade" x1="0" x2="1">
-          <stop offset="0" stopColor="#ff6b2c" stopOpacity="0" />
-          <stop offset="0.5" stopColor="#ffb07a" stopOpacity="0.9" />
-          <stop offset="1" stopColor="#ff6b2c" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {curves.map((i) => {
-        const spread = 60 + i * 26;
-        const d = `M ${600 - 560 - i * 10} ${360 - i * 6} C ${600 - spread * 2} ${220 - i * 8}, ${600 - 30} ${120 + i * 6}, 600 0 C ${600 + 30} ${120 + i * 6}, ${600 + spread * 2} ${220 - i * 8}, ${600 + 560 + i * 10} ${360 - i * 6}`;
-        return (
-          <g key={i}>
-            <path d={d} className="arc" style={{ opacity: 0.12 + i * 0.05 }} />
-            <path d={d} className="arc-flow" pathLength={100} style={{ animationDelay: `${i * 0.35}s` }} />
-          </g>
-        );
-      })}
-    </svg>
   );
 }

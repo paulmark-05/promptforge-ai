@@ -6,7 +6,7 @@ import { TECHNIQUES, type TechniqueId, type Change } from "../lib/optimizer";
 import type { ResponseMetrics } from "../lib/metrics";
 import { SAMPLE_PROMPTS } from "../lib/templates";
 import { Bar, CountUp, Icon, Logo, ScoreRing, SeverityTag, Spinner, scoreColor, scoreTone } from "../components/ui";
-import { Hero } from "../components/Hero";
+import { Hero, type HeroDemo } from "../components/Hero";
 import { EMPTY_INTENT, INTENT_FIELDS, hasIntent, intentStatement, type Intent, type IntentOptions } from "../lib/intent";
 import { combineVerdicts, type PairwiseResult } from "../lib/judge";
 
@@ -107,6 +107,34 @@ export default function Home() {
   const optLive = useMemo(() => (optText.trim() ? analyzePrompt(optText) : null), [optText]);
   const stage = runs ? 4 : opt ? 3 : intentDone ? 2 : analysis ? 1 : 0; // completed steps
   const confirmedIntent = intentDone === "confirmed" && hasIntent(intent) ? intent : null;
+
+  // The hero cards tell the before-to-after story. Before the user does anything
+  // they show an example; afterwards they reflect the user's own prompt and results.
+  const heroDemo: HeroDemo = useMemo(() => {
+    if (!analysis) {
+      return {
+        prompt: "explain machine learning",
+        guesses: ["Who is it for?", "How long?", "What format?"],
+        needs: ["For a beginner", "Under 100 words", "Bullet points", "Friendly tone"],
+        outcome: null,
+        live: false,
+      };
+    }
+    const ids = new Set(analysis.issues.map((i) => i.id));
+    const guesses = [
+      ids.has("no-context") && "Who is it for?",
+      (ids.has("no-constraints") || ids.has("too-short")) && "How long?",
+      ids.has("no-format") && "What format?",
+      ids.has("vague") && "What does good mean?",
+    ].filter((x): x is string => Boolean(x));
+    const needs = confirmedIntent
+      ? [confirmedIntent.audience && `For ${lowerFirst(confirmedIntent.audience)}`, confirmedIntent.length, confirmedIntent.format, confirmedIntent.tone]
+          .filter((x): x is string => Boolean(x && x.trim()))
+          .map((x) => (x.length > 28 ? `${x.slice(0, 26)}…` : x))
+      : [];
+    const outcome = runs ? (runs.winner === "optimized" ? "better" : runs.winner === "tie" ? "close" : "worse") : null;
+    return { prompt: prompt.length > 70 ? `${prompt.slice(0, 68)}…` : prompt, guesses: guesses.slice(0, 3), needs, outcome, live: true };
+  }, [analysis, confirmedIntent, runs, prompt]);
   const canOptimize = Boolean(analysis && !analysis.injectionRisk);
 
   async function api<T>(path: string, body: unknown): Promise<T> {
@@ -237,11 +265,6 @@ export default function Home() {
     step1.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function startWriting() {
-    step1.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    setTimeout(() => editorRef.current?.focus({ preventScroll: true }), 350);
-  }
-
   async function copyOptimized() {
     try {
       await navigator.clipboard.writeText(optText);
@@ -301,7 +324,7 @@ export default function Home() {
         </div>
       </header>
 
-      <Hero onStart={startWriting} onSample={() => loadPrompt(SAMPLE_PROMPTS[0].prompt)} />
+      <Hero onCheck={loadPrompt} samples={SAMPLE_PROMPTS.filter((x) => x.prompt.length <= 45).slice(0, 3)} demo={heroDemo} />
 
       <div className="workspace">
         <main>
@@ -791,4 +814,8 @@ function EvalCard({ title, run, result, winner, rulesLabel = "Rules in the promp
       )}
     </div>
   );
+}
+
+function lowerFirst(text: string) {
+  return /^[A-Z][a-z]/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
