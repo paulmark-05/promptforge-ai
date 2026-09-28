@@ -30,7 +30,7 @@ The workspace is a deck of five cards. Each finished step flips to the next, and
 - **Learning:** a short lesson (what, why, before/after) for every issue and change, and a "What you learned" recap.
 - **Developer:** ready-to-paste code (JavaScript, Python, curl), token estimates and JSON export.
 
-**Image prompts** are rendered by [Pollinations.ai](https://pollinations.ai). A free key from [enter.pollinations.ai](https://enter.pollinations.ai/keys) is needed for more than a couple of images; add it in Settings or as `POLLINATIONS_API_KEY`.
+**Image prompts** are rendered by [Pollinations.ai](https://pollinations.ai). Without a key only a couple of images work. For regular use, create a **Personal Secret Key (`sk_…`)** at [enter.pollinations.ai](https://enter.pollinations.ai/keys), give it a small Pollen budget (free Pollen comes from Quests, no card needed), and set it as `POLLINATIONS_API_KEY` on the server.
 
 ![Summary card](docs/screenshots/11-summary.png)
 

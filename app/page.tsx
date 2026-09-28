@@ -1070,10 +1070,10 @@ export default function Home() {
               Stored only in this browser. Get one at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer">console.groq.com/keys</a>.
             </p>
             <label htmlFor="image-key">Your Pollinations key (images, optional)</label>
-            <input id="image-key" className="field" type="password" placeholder="pk_... or sk_..." value={imageKey} onChange={(e) => setImageKey(e.target.value)} />
+            <input id="image-key" className="field" type="password" placeholder="sk_..." value={imageKey} onChange={(e) => setImageKey(e.target.value)} />
             <p style={{ fontSize: 13, color: "var(--muted)" }}>
               {status?.imageKey ? "This deployment already has an image key. " : "Without a key you get a few free, watermarked images. "}
-              Free keys at <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noreferrer">enter.pollinations.ai</a>.
+              Use a Personal Secret Key (sk_) from <a href="https://enter.pollinations.ai/keys" target="_blank" rel="noreferrer">enter.pollinations.ai</a>, with a small Pollen budget. Free Pollen comes from Quests.
             </p>
             <div className="modal-actions">
               <button className="btn ghost" onClick={() => { setUserKey(""); setImageKey(""); save(KEY_STORE, ""); save(IMAGE_KEY_STORE, ""); }}>Remove keys</button>
