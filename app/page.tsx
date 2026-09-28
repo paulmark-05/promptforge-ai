@@ -820,7 +820,7 @@ export default function Home() {
                   <div className="panel-head">
                     <h3>{kind === "image" ? "See both images" : "Compare the answers"}</h3>
                     <span className="hint">
-                      {kind === "image" ? "Free image generation by Pollinations.ai, no key needed" : confirmedIntent ? "Judged against your stated needs" : "Judged against your original request"}
+                      {kind === "image" ? "Images by Pollinations.ai (FLUX Schnell)" : confirmedIntent ? "Judged against your stated needs" : "Judged against your original request"}
                     </span>
                   </div>
 

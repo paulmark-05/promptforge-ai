@@ -32,6 +32,8 @@ The workspace is a deck of five cards. Each finished step flips to the next, and
 
 **Image prompts** are rendered by [Pollinations.ai](https://pollinations.ai). Without a key only a couple of images work. For regular use, create a **Personal Secret Key (`sk_…`)** at [enter.pollinations.ai](https://enter.pollinations.ai/keys), give it a small Pollen budget (free Pollen comes from Quests, no card needed), and set it as `POLLINATIONS_API_KEY` on the server.
 
+![Image prompt compare: "a cat" vs the optimized watercolor prompt, same seed](docs/screenshots/14-image-compare.png)
+
 ![Summary card](docs/screenshots/11-summary.png)
 
 ## Tech stack
