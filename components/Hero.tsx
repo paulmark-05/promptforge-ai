@@ -40,6 +40,25 @@ export function Hero({
   const active = held ?? auto;
   const tiltRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const heroRef = useRef<HTMLElement>(null);
+  const skyIdle = useRef(0);
+
+  // The dotted sky reacts to the mouse: dots near the pointer light up and a
+  // ripple spreads from it. It settles shortly after the mouse stops moving.
+  function skyMove(e: React.PointerEvent<HTMLElement>) {
+    const el = heroRef.current;
+    if (!el || e.pointerType !== "mouse") return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty("--mx", `${Math.round(e.clientX - r.left)}px`);
+    el.style.setProperty("--my", `${Math.round(e.clientY - r.top)}px`);
+    el.classList.add("sky-on");
+    window.clearTimeout(skyIdle.current);
+    skyIdle.current = window.setTimeout(() => el.classList.remove("sky-on"), 1800);
+  }
+  function skyLeave() {
+    window.clearTimeout(skyIdle.current);
+    heroRef.current?.classList.remove("sky-on");
+  }
 
   // The cards take turns coming forward, telling the before-to-after story.
   // While a card is held (hovered or focused) it stays in front; when the
@@ -95,9 +114,11 @@ export function Hero({
   };
 
   return (
-    <section className="hero3" id="top">
+    <section className="hero3" id="top" ref={heroRef} onPointerMove={skyMove} onPointerLeave={skyLeave}>
       <div className="hero3-bg" aria-hidden>
         <div className="sky" />
+        <div className="sky-lit" />
+        <div className="sky-ripple" />
         <div className="sun" />
         <div className="floor" />
       </div>

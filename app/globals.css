@@ -605,3 +605,40 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
 .stack, .hits { width: min(380px, 100%); }
 .card3-hint { max-width: 0; overflow: hidden; white-space: nowrap; transition: max-width 0.3s var(--ease), opacity 0.25s var(--ease), transform 0.25s var(--ease); }
 .stage.hovering .card3.active .card3-hint, .card3:focus-visible .card3-hint { max-width: 120px; }
+
+/* Dotted sky: dots near the pointer light up and a ripple spreads from it */
+@property --spot { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --rr { syntax: "<length>"; inherits: false; initial-value: 0px; }
+.hero3 { --mx: 60%; --my: 20%; --spot: 0px; transition: --spot 0.6s var(--ease); }
+.hero3.sky-on { --spot: 190px; }
+.sky-lit, .sky-ripple {
+  position: absolute; left: 0; right: 0; top: 0; height: 62%; pointer-events: none;
+  background-image: radial-gradient(circle, rgba(255, 205, 165, 1) 1.2px, transparent 2px);
+  background-size: 28px 28px;
+  filter: drop-shadow(0 0 3px rgba(255, 120, 50, 0.9));
+}
+.sky-lit {
+  -webkit-mask-image: radial-gradient(circle var(--spot) at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.35) 55%, transparent 100%);
+  mask-image: radial-gradient(circle var(--spot) at var(--mx) var(--my), #000 0%, rgba(0, 0, 0, 0.35) 55%, transparent 100%);
+}
+.sky-ripple {
+  opacity: 0; transition: opacity 0.5s var(--ease);
+  -webkit-mask-image: radial-gradient(circle at var(--mx) var(--my), transparent calc(var(--rr) - 26px), #000 var(--rr), transparent calc(var(--rr) + 26px));
+  mask-image: radial-gradient(circle at var(--mx) var(--my), transparent calc(var(--rr) - 26px), #000 var(--rr), transparent calc(var(--rr) + 26px));
+}
+.hero3.sky-on .sky-ripple { opacity: 0.8; animation: ripple 2.2s var(--ease) infinite; }
+@keyframes ripple { from { --rr: 20px; } to { --rr: 420px; } }
+@media (hover: none) { .sky-lit, .sky-ripple { display: none; } }
+@media (prefers-reduced-motion: reduce) { .hero3.sky-on .sky-ripple { animation: none; opacity: 0; } }
+/* Contrast: a quiet resting field, bright dots where the pointer is */
+@keyframes twinkle { 0%, 100% { opacity: 0.32; } 50% { opacity: 0.5; } }
+.hero3.sky-on { --spot: 230px; }
+.sky-lit, .sky-ripple {
+  background-image: radial-gradient(circle, #ffeadb 1.6px, transparent 2.4px);
+  filter: drop-shadow(0 0 4px rgba(255, 130, 60, 1)) drop-shadow(0 0 10px rgba(255, 107, 44, 0.6));
+}
+.sky-ripple {
+  -webkit-mask-image: radial-gradient(circle at var(--mx) var(--my), transparent calc(var(--rr) - 34px), rgba(0, 0, 0, 0.9) var(--rr), transparent calc(var(--rr) + 34px));
+  mask-image: radial-gradient(circle at var(--mx) var(--my), transparent calc(var(--rr) - 34px), rgba(0, 0, 0, 0.9) var(--rr), transparent calc(var(--rr) + 34px));
+}
+.hero3.sky-on .sky-ripple { opacity: 1; }
