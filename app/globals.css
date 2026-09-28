@@ -642,3 +642,68 @@ input.field.need-input { margin-top: 0; height: 40px; font-family: var(--sans); 
   mask-image: radial-gradient(circle at var(--mx) var(--my), transparent calc(var(--rr) - 34px), rgba(0, 0, 0, 0.9) var(--rr), transparent calc(var(--rr) + 34px));
 }
 .hero3.sky-on .sky-ripple { opacity: 1; }
+
+/* ---------- Calmer resting state; animation on hover ---------- */
+.sky { animation: none; opacity: 0.42; }
+.sky-ripple { display: none; }
+.stack { animation: none; }
+/* Cards bob gently at rest (independent "translate" so it composes with the 3D transform) */
+.card3 { opacity: 0.9; animation: bob 5.5s ease-in-out infinite; animation-delay: calc(var(--i) * -1.8s); }
+@keyframes bob { 0%, 100% { translate: 0 0; } 50% { translate: 0 -7px; } }
+.card3 .sheen { animation: none; opacity: 0; }
+.card3.active .sheen { opacity: 1; animation: sheen 2.4s ease-in-out infinite; }
+.c-pill.guess { animation: none; }
+.card3.active .c-pill.guess { animation: flicker 1.6s infinite; animation-delay: calc(var(--k) * 0.25s); }
+.caret { animation: none; opacity: 0.85; }
+.card3.active .caret { animation: blink 1s steps(1) infinite; }
+.stage.hovering .card3:not(.active) { opacity: 0.55; }
+
+/* ---------- Scroll: the scene moves in 3D as the hero scrolls away ---------- */
+.hero3 { --sp: 0; }
+.floor { transform: perspective(700px) rotateX(calc(58deg + var(--sp) * 16deg)) translateY(calc(var(--sp) * 40px)); }
+.sun { translate: 0 calc(var(--sp) * 160px); }
+.sky, .sky-lit { background-position: 0 calc(var(--sp) * -90px); }
+.stage { transform: translateY(calc(var(--sp) * 90px)); }
+.tilt { translate: 0 0; rotate: x calc(var(--sp) * 14deg); }
+.hero3-copy { transform: translateY(calc(var(--sp) * -50px)); }
+.nbeam { translate: 0 calc(var(--sp) * -80px); }
+
+/* Scroll progress line under the navigation bar */
+.nav { position: sticky; }
+.nav::after {
+  content: ""; position: absolute; left: 0; bottom: -1px; height: 2px;
+  width: calc(var(--page-sp, 0) * 100%);
+  background: linear-gradient(90deg, #ff7a36, #ffc195);
+  box-shadow: 0 0 10px rgba(255, 107, 44, 0.8);
+}
+
+/* ---------- Text reacts to hover ---------- */
+.hw { display: inline-block; transition: transform 0.3s var(--ease), color 0.3s, text-shadow 0.3s; }
+.hw:hover { transform: translateY(-5px); color: #fff; text-shadow: 0 0 22px rgba(255, 120, 60, 0.6); }
+.hw.neon-word:hover {
+  animation: none;
+  text-shadow: 0 0 6px rgba(255, 210, 180, 1), 0 0 20px rgba(255, 120, 60, 1), 0 0 48px rgba(255, 107, 44, 0.9), 0 0 96px rgba(255, 107, 44, 0.6);
+}
+.brand-em { position: relative; transition: color 0.25s, text-shadow 0.25s; }
+.brand-em::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, #ff7a36, #ffc195); box-shadow: 0 0 8px rgba(255, 107, 44, 0.8);
+  transform: scaleX(0); transform-origin: left; transition: transform 0.35s var(--ease);
+}
+.brand-em:hover { color: #ffd2b3; text-shadow: 0 0 18px rgba(255, 107, 44, 0.7); }
+.brand-em:hover::after { transform: scaleX(1); }
+.how3 li { transition: transform 0.25s var(--ease); }
+.how3 li:hover { transform: translateY(-3px); }
+.how3 .how-n { transition: background 0.25s, border-color 0.25s, box-shadow 0.25s, color 0.25s; }
+.how3 li:hover .how-n { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); box-shadow: 0 0 18px rgba(255, 107, 44, 0.7); }
+.how3 li:hover b { color: #ffd2b3; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card3, .card3.active .sheen, .card3.active .c-pill.guess { animation: none !important; }
+  .hw:hover, .how3 li:hover { transform: none; }
+}
+@media (max-width: 960px) {
+  .stage, .hero3-copy { transform: none; }
+}
+/* Blend the bottom of the hero into the page so the grid never ends in a hard line */
+.hero3::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 140px; background: linear-gradient(to bottom, transparent, var(--bg)); pointer-events: none; z-index: 0; }

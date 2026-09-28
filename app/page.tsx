@@ -89,7 +89,12 @@ export default function Home() {
     setUserKey(load(KEY_STORE, ""));
     setHistory(load(HISTORY_STORE, []));
     fetch("/api/status").then((r) => r.json()).then(setStatus).catch(() => setStatus({ serverKey: false, model: "" }));
-    const onScroll = () => setScrolled(window.scrollY > 8);
+    const onScroll = () => {
+      setScrolled(window.scrollY > 8);
+      // Page scroll progress drives the thin line under the navigation bar.
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      document.documentElement.style.setProperty("--page-sp", (max > 0 ? window.scrollY / max : 0).toFixed(4));
+    };
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);

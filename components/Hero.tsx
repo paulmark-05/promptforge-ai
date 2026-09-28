@@ -35,16 +35,15 @@ export function Hero({
   demo: HeroDemo;
 }) {
   const [text, setText] = useState("");
-  const [auto, setAuto] = useState(0); // where the timed story is
   const [held, setHeld] = useState<number | null>(null); // card the visitor is pointing at
-  const active = held ?? auto;
+  const active = held; // cards rest (gently bobbing) until one is hovered
   const tiltRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const heroRef = useRef<HTMLElement>(null);
   const skyIdle = useRef(0);
 
-  // The dotted sky reacts to the mouse: dots near the pointer light up and a
-  // ripple spreads from it. It settles shortly after the mouse stops moving.
+  // The dotted sky reacts to the mouse: dots near the pointer light up.
+  // It settles shortly after the mouse stops moving.
   function skyMove(e: React.PointerEvent<HTMLElement>) {
     const el = heroRef.current;
     if (!el || e.pointerType !== "mouse") return;
@@ -60,23 +59,33 @@ export function Hero({
     heroRef.current?.classList.remove("sky-on");
   }
 
-  // The cards take turns coming forward, telling the before-to-after story.
-  // While a card is held (hovered or focused) it stays in front; when the
-  // visitor leaves, the story carries on from that card.
+  // Scroll moves the scene: 0 at the top of the page, 1 once the hero has
+  // scrolled away. CSS turns it into parallax and a tilting grid.
   useEffect(() => {
-    if (held !== null || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-    const id = setInterval(() => setAuto((a) => (a + 1) % 3), 3000);
-    return () => clearInterval(id);
-  }, [held]);
+    const el = heroRef.current;
+    if (!el || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const p = Math.min(1, Math.max(0, window.scrollY / Math.max(1, el.offsetHeight)));
+      el.style.setProperty("--sp", p.toFixed(3));
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(update);
+    };
+    update();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
-  const heldRef = useRef<number | null>(null);
+  // A hovered or focused card comes forward and plays its animation.
   function hold(index: number) {
-    heldRef.current = index;
     setHeld(index);
   }
   function release() {
-    if (heldRef.current !== null) setAuto(heldRef.current);
-    heldRef.current = null;
     setHeld(null);
   }
 
@@ -118,7 +127,6 @@ export function Hero({
       <div className="hero3-bg" aria-hidden>
         <div className="sky" />
         <div className="sky-lit" />
-        <div className="sky-ripple" />
         <div className="sun" />
         <div className="floor" />
       </div>
@@ -197,10 +205,10 @@ export function Hero({
         </div>
 
         <div className="hero3-copy">
-          <h1>
-            Say what you need.
+          <h1 className="hw-line">
+            <Words text="Say what you need." />
             <br />
-            Get the answer you <span className="neon-word">meant</span>.
+            <Words text="Get the answer you" /> <span className="hw neon-word">meant</span>.
           </h1>
           <p className="lede">
             A vague prompt makes the model guess, so you get a long, generic answer. <em className="brand-em">PromptForge</em> shows what your prompt leaves out,
@@ -252,6 +260,21 @@ export function Hero({
   );
 }
 
+// Each headline word is its own hover target.
+function Words({ text }: { text: string }) {
+  const parts = text.split(" ");
+  return (
+    <>
+      {parts.map((w, i) => (
+        <span key={i}>
+          <span className="hw">{w}</span>
+          {i < parts.length - 1 ? " " : ""}
+        </span>
+      ))}
+    </>
+  );
+}
+
 function Card({
   index,
   active,
@@ -264,7 +287,7 @@ function Card({
   children,
 }: {
   index: number;
-  active: number;
+  active: number | null;
   step: string;
   title: string;
   hint: string;
